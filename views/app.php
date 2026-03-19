@@ -1023,6 +1023,9 @@
           <div v-if="selectedProduct.compare_price" class="discount-badge d-inline-block mb-2">
             {{ Math.round((1 - selectedProduct.price/selectedProduct.compare_price)*100) }}% OFF
           </div>
+          <hr>
+          <div v-if="selectedProduct.short_desc" class="short-desc mb-3"><i class="bi bi-truck me-1"></i>{{ selectedProduct.short_desc }}</div>
+          <hr>
           <div v-if="selectedProduct.free_shipping" class="free-ship mb-3"><i class="bi bi-truck me-1"></i>Envío gratis</div>
           <div class="mb-3">
             <span class="fw-bold">Stock: </span>

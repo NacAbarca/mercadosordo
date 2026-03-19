@@ -174,6 +174,7 @@ class ProductController
             'title'          => trim($data['title']),
             'slug'           => $slug,
             'description'    => $req->input('description') ?: null,
+            'short_desc'     => $req->input('short_desc') ?: null,
             'price'          => (float) $data['price'],
             'compare_price'  => ($comparePrice !== null && $comparePrice !== '' && (float)$comparePrice > 0)
                                     ? (float) $comparePrice : null,
@@ -202,7 +203,7 @@ class ProductController
             Response::json(['error' => 'Forbidden'], 403);
         }
         $raw     = $req->all();
-        $allowed = ['title','description','price','compare_price','stock','stock_alert',
+        $allowed = ['title','description','short_desc','price','compare_price','stock','stock_alert',
                     'condition_type','free_shipping','status','category_id','sku',
                     'weight_kg','meta_desc','meta_title','featured'];
         $data    = array_intersect_key($raw, array_flip($allowed));
