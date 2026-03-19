@@ -161,19 +161,33 @@ class ProductController
         ]);
         $db   = DB::getInstance();
         $slug = $this->uniqueSlug($data['title'], $db);
-        $id   = $db->insert('products', [
-            'seller_id'      => Auth::id(),
-            'category_id'    => $data['category_id'],
-            'title'          => $data['title'],
+
+        // Sanitizar tipos para MySQL — evita SQLSTATE 1366
+        $comparePrice = $req->input('compare_price');
+        $weightKg     = $req->input('weight_kg');
+        $stockAlert   = $req->input('stock_alert', 5);
+        $freeShipping = $req->input('free_shipping', false);
+
+        $id = $db->insert('products', [
+            'seller_id'      => (int) Auth::id(),
+            'category_id'    => (int) $data['category_id'],
+            'title'          => trim($data['title']),
             'slug'           => $slug,
-            'description'    => $req->input('description'),
-            'price'          => $data['price'],
-            'compare_price'  => $req->input('compare_price'),
-            'stock'          => $data['stock'],
-            'condition_type' => $req->input('condition', 'new'),
-            'free_shipping'  => $req->input('free_shipping', false),
-            'status'         => 'active',
+            'description'    => $req->input('description') ?: null,
+            'price'          => (float) $data['price'],
+            'compare_price'  => ($comparePrice !== null && $comparePrice !== '' && (float)$comparePrice > 0)
+                                    ? (float) $comparePrice : null,
+            'stock'          => (int) $data['stock'],
+            'stock_alert'    => (int) ($stockAlert !== '' ? $stockAlert : 5),
+            'condition_type' => $req->input('condition_type', $req->input('condition', 'new')),
+            'free_shipping'  => ($freeShipping === true || $freeShipping === 'true' || $freeShipping === 1 || $freeShipping === '1') ? 1 : 0,
+            'weight_kg'      => ($weightKg !== null && $weightKg !== '' && (float)$weightKg > 0)
+                                    ? (float) $weightKg : null,
+            'status'         => in_array($req->input('status'), ['active','draft','paused']) ? $req->input('status') : 'active',
             'sku'            => $req->input('sku') ?: null,
+            'meta_title'     => $req->input('short_desc') ? substr($req->input('short_desc'), 0, 255) : null,
+            'meta_desc'      => $req->input('short_desc') ?: null,
+            'featured'       => 0,
         ]);
         Response::json(['id' => $id, 'slug' => $slug], 201);
     }
@@ -184,10 +198,35 @@ class ProductController
         $db      = DB::getInstance();
         $product = $db->fetch("SELECT * FROM products WHERE id=?", [$id]);
         if (!$product) Response::json(['error' => 'Not found'], 404);
-        if ($product['seller_id'] !== Auth::id() && !Auth::is('admin')) Response::json(['error' => 'Forbidden'], 403);
-        $allowed = ['title','description','price','compare_price','stock','condition_type','free_shipping','status','category_id','sku'];
-        $data    = array_intersect_key($req->all(), array_flip($allowed));
+        if ((int)$product['seller_id'] !== (int)Auth::id() && !Auth::is('admin')) {
+            Response::json(['error' => 'Forbidden'], 403);
+        }
+        $raw     = $req->all();
+        $allowed = ['title','description','price','compare_price','stock','stock_alert',
+                    'condition_type','free_shipping','status','category_id','sku',
+                    'weight_kg','meta_desc','meta_title','featured'];
+        $data    = array_intersect_key($raw, array_flip($allowed));
         if (empty($data)) Response::json(['error' => 'Sin datos para actualizar.'], 422);
+
+        // Sanitizar tipos — mismo criterio que store()
+        if (isset($data['free_shipping'])) {
+            $fs = $data['free_shipping'];
+            $data['free_shipping'] = ($fs === true || $fs === 'true' || $fs === 1 || $fs === '1') ? 1 : 0;
+        }
+        if (isset($data['price']))         $data['price']         = (float) $data['price'];
+        if (isset($data['compare_price'])) $data['compare_price'] = ($data['compare_price'] !== '' && (float)$data['compare_price'] > 0) ? (float)$data['compare_price'] : null;
+        if (isset($data['stock']))         $data['stock']         = (int) $data['stock'];
+        if (isset($data['stock_alert']))   $data['stock_alert']   = (int) $data['stock_alert'];
+        if (isset($data['category_id']))   $data['category_id']   = (int) $data['category_id'];
+        if (isset($data['weight_kg']))     $data['weight_kg']     = ($data['weight_kg'] !== '' && (float)$data['weight_kg'] > 0) ? (float)$data['weight_kg'] : null;
+        if (isset($data['featured']))      $data['featured']      = $data['featured'] ? 1 : 0;
+
+        // short_desc se guarda en meta_desc / meta_title
+        if (isset($raw['short_desc'])) {
+            $data['meta_desc']  = $raw['short_desc'] ?: null;
+            $data['meta_title'] = $raw['short_desc'] ? substr($raw['short_desc'], 0, 255) : null;
+        }
+
         $db->update('products', $data, 'id=?', [$id]);
         Response::json(['message' => 'Producto actualizado.']);
     }

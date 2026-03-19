@@ -568,6 +568,419 @@
       </div>
     </template>
 
+
+    <!-- ─── MIS VENTAS ─── -->
+    <template v-if="currentView === 'my-products'">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h3 class="section-title mb-0"><i class="bi bi-shop me-2 text-primary"></i>Mis ventas</h3>
+        <button class="btn btn-primary btn-sm fw-bold px-3" @click="openProductForm(null)">
+          <i class="bi bi-plus-lg me-1"></i>Publicar producto
+        </button>
+      </div>
+
+      <!-- TABS -->
+      <ul class="nav nav-tabs mb-3" id="sellerTabs">
+        <li class="nav-item">
+          <a class="nav-link" :class="{active: sellerTab==='list'}" href="#" @click.prevent="sellerTab='list'">
+            <i class="bi bi-grid-3x3-gap me-1"></i>Mis publicaciones
+            <span class="badge bg-primary ms-1" v-if="myProducts.data.length">{{ myProducts.data.length }}</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" :class="{active: sellerTab==='form'}" href="#" @click.prevent="openProductForm(null)">
+            <i class="bi bi-plus-circle me-1"></i>{{ productForm.id ? 'Editar producto' : 'Nuevo producto' }}
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" :class="{active: sellerTab==='stats'}" href="#" @click.prevent="sellerTab='stats'">
+            <i class="bi bi-bar-chart me-1"></i>Estadísticas
+          </a>
+        </li>
+      </ul>
+
+      <!-- ── TAB: LISTADO ── -->
+      <div v-if="sellerTab === 'list'">
+        <div v-if="myProductsLoading" class="text-center py-5">
+          <div class="spinner-border text-primary"></div>
+          <p class="mt-2 text-muted small">Cargando tus publicaciones...</p>
+        </div>
+        <div v-else>
+          <!-- Filtro rápido -->
+          <div class="bg-white rounded p-3 mb-3 shadow-sm d-flex gap-2 flex-wrap align-items-center">
+            <input type="text" class="form-control form-control-sm w-auto flex-grow-1"
+                   placeholder="Buscar en mis productos..." v-model="myProductSearch">
+            <select class="form-select form-select-sm w-auto" v-model="myProductStatusFilter">
+              <option value="">Todos los estados</option>
+              <option value="active">Activos</option>
+              <option value="paused">Pausados</option>
+              <option value="draft">Borrador</option>
+              <option value="sold_out">Sin stock</option>
+            </select>
+            <span class="text-muted small">{{ filteredMyProducts.length }} productos</span>
+          </div>
+
+          <!-- Tabla -->
+          <div class="bg-white rounded shadow-sm overflow-hidden" v-if="filteredMyProducts.length > 0">
+            <table class="table table-striped table-hover align-middle mb-0">
+              <thead class="table-dark">
+                <tr>
+                  <th style="width:60px">Foto</th>
+                  <th>Título</th>
+                  <th class="d-none d-md-table-cell">Categoría</th>
+                  <th>Precio</th>
+                  <th class="d-none d-sm-table-cell">Stock</th>
+                  <th class="d-none d-md-table-cell">Condición</th>
+                  <th>Estado</th>
+                  <th class="d-none d-lg-table-cell">Vistas</th>
+                  <th class="d-none d-lg-table-cell">Ventas</th>
+                  <th style="width:130px">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="p in filteredMyProducts" :key="p.id">
+                  <td>
+                    <img :src="p.primary_image || 'https://via.placeholder.com/48'"
+                         class="rounded" style="width:48px;height:48px;object-fit:contain;background:#f8f8f8">
+                  </td>
+                  <td>
+                    <div class="fw-bold" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="p.title">{{ p.title }}</div>
+                    <div class="text-muted" style="font-size:.75rem">SKU: {{ p.sku || '—' }}</div>
+                  </td>
+                  <td class="d-none d-md-table-cell">
+                    <span class="badge bg-light text-dark border">{{ getCategoryName(p.category_id) }}</span>
+                  </td>
+                  <td>
+                    <div class="fw-bold text-primary">{{ formatCLP(p.price) }}</div>
+                    <div class="text-muted text-decoration-line-through" style="font-size:.75rem" v-if="p.compare_price">{{ formatCLP(p.compare_price) }}</div>
+                  </td>
+                  <td class="d-none d-sm-table-cell">
+                    <span :class="p.stock <= 5 ? 'text-danger fw-bold' : 'text-success fw-bold'">{{ p.stock }}</span>
+                  </td>
+                  <td class="d-none d-md-table-cell">
+                    <span class="badge" :class="{'bg-info text-dark': p.condition_type==='new', 'bg-warning text-dark': p.condition_type==='used', 'bg-secondary': p.condition_type==='refurbished'}">
+                      {{ {new:'Nuevo', used:'Usado', refurbished:'Reacond.'}[p.condition_type] || p.condition_type }}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="form-check form-switch mb-0" style="min-width:80px">
+                      <input class="form-check-input" type="checkbox"
+                             :checked="p.status === 'active'"
+                             @change="toggleProductStatus(p)"
+                             :id="'sw-'+p.id">
+                      <label class="form-check-label small" :for="'sw-'+p.id">
+                        {{ p.status === 'active' ? 'Activo' : p.status === 'paused' ? 'Pausado' : p.status }}
+                      </label>
+                    </div>
+                  </td>
+                  <td class="d-none d-lg-table-cell text-muted small">{{ p.views || 0 }}</td>
+                  <td class="d-none d-lg-table-cell text-muted small">{{ p.sales_count || 0 }}</td>
+                  <td>
+                    <div class="d-flex gap-1">
+                      <button class="btn btn-sm btn-outline-primary" title="Editar" @click="openProductForm(p)">
+                        <i class="bi bi-pencil"></i>
+                      </button>
+                      <button class="btn btn-sm btn-outline-info" title="Ver publicación" @click="viewProduct(p)">
+                        <i class="bi bi-eye"></i>
+                      </button>
+                      <button class="btn btn-sm btn-outline-danger" title="Eliminar" @click="confirmDeleteProduct(p)">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Empty state -->
+          <div v-else class="text-center py-5 bg-white rounded shadow-sm">
+            <i class="bi bi-bag-x" style="font-size:3rem;color:#ccc"></i>
+            <p class="mt-3 fw-bold">No tienes publicaciones aún</p>
+            <p class="text-muted small mb-3">Comienza a vender publicando tu primer producto</p>
+            <button class="btn btn-primary" @click="openProductForm(null)">
+              <i class="bi bi-plus-lg me-1"></i>Publicar ahora
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB: FORMULARIO ── -->
+      <div v-if="sellerTab === 'form'">
+        <div class="bg-white rounded shadow-sm p-4">
+          <h5 class="fw-bold mb-4">
+            <i class="bi bi-pencil-square me-2 text-primary"></i>
+            {{ productForm.id ? 'Editar publicación' : 'Nueva publicación' }}
+          </h5>
+
+          <form @submit.prevent="submitProductForm" novalidate>
+            <div class="row g-3">
+
+              <!-- Título -->
+              <div class="col-12">
+                <label class="form-label fw-bold">Título <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" :class="{'is-invalid': formErrors.title}"
+                       v-model="productForm.title" placeholder="Ej: iPhone 14 Pro 256GB Negro Espacial"
+                       maxlength="255">
+                <div class="d-flex justify-content-between">
+                  <div class="invalid-feedback">{{ formErrors.title }}</div>
+                  <small class="text-muted ms-auto">{{ productForm.title.length }}/255</small>
+                </div>
+              </div>
+
+              <!-- Descripción breve -->
+              <div class="col-12">
+                <label class="form-label fw-bold">Descripción breve <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" :class="{'is-invalid': formErrors.short_desc}"
+                       v-model="productForm.short_desc"
+                       placeholder="Resumen en una línea para listados y resultados de búsqueda"
+                       maxlength="160">
+                <div class="d-flex justify-content-between">
+                  <div class="invalid-feedback">{{ formErrors.short_desc }}</div>
+                  <small class="text-muted ms-auto">{{ productForm.short_desc.length }}/160</small>
+                </div>
+              </div>
+
+              <!-- Descripción completa -->
+              <div class="col-12">
+                <label class="form-label fw-bold">Descripción completa</label>
+                <textarea class="form-control" v-model="productForm.description"
+                          placeholder="Describe el producto en detalle: características, estado, accesorios incluidos, etc."
+                          rows="5" maxlength="5000"></textarea>
+                <small class="text-muted">{{ productForm.description.length }}/5000 caracteres</small>
+              </div>
+
+              <!-- Categoría -->
+              <div class="col-md-6">
+                <label class="form-label fw-bold">Categoría <span class="text-danger">*</span></label>
+                <select class="form-select" :class="{'is-invalid': formErrors.category_id}"
+                        v-model="productForm.category_id">
+                  <option value="">— Selecciona una categoría —</option>
+                  <option v-for="c in categories" :key="c.id" :value="c.id">
+                    {{ c.name }}
+                  </option>
+                </select>
+                <div class="invalid-feedback">{{ formErrors.category_id }}</div>
+              </div>
+
+              <!-- Condición -->
+              <div class="col-md-6">
+                <label class="form-label fw-bold">Condición <span class="text-danger">*</span></label>
+                <div class="d-flex gap-2 mt-1">
+                  <div v-for="cond in [{v:'new',l:'Nuevo',i:'bi-stars'},{v:'used',l:'Usado',i:'bi-recycle'},{v:'refurbished',l:'Reacondicionado',i:'bi-tools'}]"
+                       :key="cond.v"
+                       class="condition-opt flex-fill text-center p-2 rounded border"
+                       :class="productForm.condition_type === cond.v ? 'border-primary bg-primary bg-opacity-10 fw-bold' : 'border-light-subtle'"
+                       style="cursor:pointer"
+                       @click="productForm.condition_type = cond.v">
+                    <i :class="'bi ' + cond.i + ' d-block mb-1'" style="font-size:1.3rem"></i>
+                    <small>{{ cond.l }}</small>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Precio -->
+              <div class="col-md-4">
+                <label class="form-label fw-bold">Precio (CLP) <span class="text-danger">*</span></label>
+                <div class="input-group">
+                  <span class="input-group-text">$</span>
+                  <input type="number" class="form-control" :class="{'is-invalid': formErrors.price}"
+                         v-model.number="productForm.price" placeholder="0" min="0">
+                  <div class="invalid-feedback">{{ formErrors.price }}</div>
+                </div>
+                <small class="text-muted" v-if="productForm.price > 0">{{ formatCLP(productForm.price) }}</small>
+              </div>
+
+              <!-- Precio comparación -->
+              <div class="col-md-4">
+                <label class="form-label fw-bold">Precio tachado <span class="text-muted fw-normal small">(opcional)</span></label>
+                <div class="input-group">
+                  <span class="input-group-text">$</span>
+                  <input type="number" class="form-control" v-model.number="productForm.compare_price"
+                         placeholder="Precio antes del descuento" min="0">
+                </div>
+                <small class="text-success fw-bold" v-if="productForm.compare_price > productForm.price && productForm.price > 0">
+                  {{ Math.round((1 - productForm.price / productForm.compare_price) * 100) }}% de descuento
+                </small>
+              </div>
+
+              <!-- Stock -->
+              <div class="col-md-4">
+                <label class="form-label fw-bold">Stock disponible <span class="text-danger">*</span></label>
+                <input type="number" class="form-control" :class="{'is-invalid': formErrors.stock}"
+                       v-model.number="productForm.stock" placeholder="0" min="0">
+                <div class="invalid-feedback">{{ formErrors.stock }}</div>
+              </div>
+
+              <!-- Tipo de entrega -->
+              <div class="col-md-6">
+                <label class="form-label fw-bold">Tipo de entrega <span class="text-danger">*</span></label>
+                <div class="d-flex flex-column gap-2 mt-1">
+                  <div v-for="del in [
+                    {v:'shipping', l:'Envío a domicilio', i:'bi-truck', d:'Despacho por courier'},
+                    {v:'pickup',   l:'Retiro en persona', i:'bi-person-walking', d:'El comprador retira'},
+                    {v:'both',     l:'Ambas opciones',    i:'bi-arrow-left-right', d:'Envío o retiro'}
+                  ]" :key="del.v"
+                    class="d-flex align-items-center gap-3 p-2 rounded border"
+                    :class="productForm.delivery_type === del.v ? 'border-primary bg-primary bg-opacity-10' : ''"
+                    style="cursor:pointer"
+                    @click="productForm.delivery_type = del.v">
+                    <i :class="'bi ' + del.i + ' text-primary'" style="font-size:1.4rem;width:24px"></i>
+                    <div>
+                      <div class="fw-bold small">{{ del.l }}</div>
+                      <div class="text-muted" style="font-size:.75rem">{{ del.d }}</div>
+                    </div>
+                    <i class="bi bi-check-circle-fill text-primary ms-auto" v-if="productForm.delivery_type === del.v"></i>
+                  </div>
+                </div>
+                <div class="mt-2">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="freeShip" v-model="productForm.free_shipping">
+                    <label class="form-check-label small fw-bold text-success" for="freeShip">
+                      <i class="bi bi-truck me-1"></i>Envío gratis
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- SKU y Link externo -->
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label class="form-label fw-bold">SKU / Código interno <span class="text-muted fw-normal small">(opcional)</span></label>
+                  <input type="text" class="form-control" v-model="productForm.sku"
+                         placeholder="Ej: APPL-IP14-256-BLK">
+                </div>
+                <div>
+                  <label class="form-label fw-bold">Link externo / referencia <span class="text-muted fw-normal small">(opcional)</span></label>
+                  <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-link-45deg"></i></span>
+                    <input type="url" class="form-control" :class="{'is-invalid': formErrors.external_link}"
+                           v-model="productForm.external_link"
+                           placeholder="https://...">
+                    <div class="invalid-feedback">{{ formErrors.external_link }}</div>
+                  </div>
+                  <small class="text-muted">Ficha técnica, tienda oficial, MercadoLibre, etc.</small>
+                </div>
+              </div>
+
+              <!-- Alertas y opciones extra -->
+              <div class="col-12">
+                <div class="bg-light rounded p-3">
+                  <div class="row g-2">
+                    <div class="col-md-4">
+                      <label class="form-label small fw-bold">Alerta de stock mínimo</label>
+                      <input type="number" class="form-control form-control-sm" v-model.number="productForm.stock_alert"
+                             min="0" placeholder="5">
+                      <small class="text-muted">Avísame cuando quede este stock</small>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label small fw-bold">Peso (kg)</label>
+                      <input type="number" class="form-control form-control-sm" v-model.number="productForm.weight_kg"
+                             min="0" step="0.1" placeholder="0.0">
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label small fw-bold">Estado de publicación</label>
+                      <select class="form-select form-select-sm" v-model="productForm.status">
+                        <option value="active">Activo — visible en el catálogo</option>
+                        <option value="draft">Borrador — solo yo lo veo</option>
+                        <option value="paused">Pausado — oculto temporalmente</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div><!-- /row -->
+
+            <!-- Errores globales -->
+            <div class="alert alert-danger mt-3 mb-0" v-if="formErrors._global">
+              <i class="bi bi-exclamation-triangle me-2"></i>{{ formErrors._global }}
+            </div>
+
+            <!-- Botones -->
+            <div class="d-flex gap-2 mt-4 pt-3 border-top">
+              <button type="submit" class="btn btn-primary fw-bold px-4" :disabled="productFormLoading">
+                <span v-if="productFormLoading" class="spinner-border spinner-border-sm me-2"></span>
+                <i class="bi bi-cloud-upload me-1" v-else></i>
+                {{ productForm.id ? 'Guardar cambios' : 'Publicar producto' }}
+              </button>
+              <button type="button" class="btn btn-outline-secondary" @click="sellerTab='list'">
+                <i class="bi bi-x-lg me-1"></i>Cancelar
+              </button>
+              <button type="button" class="btn btn-outline-warning ms-auto" v-if="productForm.id"
+                      @click="productForm.status = (productForm.status==='active'?'paused':'active')">
+                <i class="bi bi-pause-circle me-1"></i>
+                {{ productForm.status === 'active' ? 'Pausar' : 'Activar' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- ── TAB: ESTADÍSTICAS ── -->
+      <div v-if="sellerTab === 'stats'">
+        <div class="row g-3 mb-4">
+          <div class="col-6 col-md-3">
+            <div class="bg-white rounded p-3 shadow-sm text-center">
+              <div class="fw-bold" style="font-size:1.8rem;color:var(--ms-blue)">{{ myProducts.data.length }}</div>
+              <div class="text-muted small">Publicaciones</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="bg-white rounded p-3 shadow-sm text-center">
+              <div class="fw-bold" style="font-size:1.8rem;color:var(--ms-green)">
+                {{ myProducts.data.filter(p=>p.status==='active').length }}
+              </div>
+              <div class="text-muted small">Activos</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="bg-white rounded p-3 shadow-sm text-center">
+              <div class="fw-bold" style="font-size:1.8rem;color:var(--ms-yellow-dark)">
+                {{ myProducts.data.reduce((a,p)=>a+(p.views||0),0) }}
+              </div>
+              <div class="text-muted small">Vistas totales</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="bg-white rounded p-3 shadow-sm text-center">
+              <div class="fw-bold" style="font-size:1.8rem;color:var(--ms-green)">
+                {{ myProducts.data.reduce((a,p)=>a+(p.sales_count||0),0) }}
+              </div>
+              <div class="text-muted small">Ventas totales</div>
+            </div>
+          </div>
+        </div>
+        <!-- Top 5 productos por ventas -->
+        <div class="bg-white rounded shadow-sm p-4">
+          <h6 class="fw-bold mb-3"><i class="bi bi-trophy me-2 text-warning"></i>Top productos por ventas</h6>
+          <table class="table table-striped table-sm mb-0">
+            <thead class="table-light">
+              <tr><th>#</th><th>Producto</th><th>Precio</th><th>Ventas</th><th>Vistas</th><th>Conversión</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="(p,i) in [...myProducts.data].sort((a,b)=>(b.sales_count||0)-(a.sales_count||0)).slice(0,5)" :key="p.id">
+                <td><span class="badge" :class="['bg-warning text-dark','bg-secondary','bg-secondary','bg-secondary','bg-secondary'][i]">{{ i+1 }}</span></td>
+                <td class="fw-bold">{{ p.title }}</td>
+                <td>{{ formatCLP(p.price) }}</td>
+                <td><span class="text-success fw-bold">{{ p.sales_count || 0 }}</span></td>
+                <td>{{ p.views || 0 }}</td>
+                <td>
+                  <span class="small" v-if="p.views > 0">
+                    {{ ((p.sales_count||0) / p.views * 100).toFixed(1) }}%
+                  </span>
+                  <span class="text-muted small" v-else>—</span>
+                </td>
+              </tr>
+              <tr v-if="myProducts.data.length === 0">
+                <td colspan="6" class="text-center text-muted py-3">Sin datos aún</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </template>
+
   </div>
 
   <!-- ─── PRODUCT DETAIL (full-width) ─── -->
@@ -907,6 +1320,21 @@
     </div>
   </div>
 
+
+  <!-- Modal Confirmar Eliminación -->
+  <div v-if="deleteConfirm.show" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;display:flex;align-items:center;justify-content:center" @click.self="deleteConfirm.show=false">
+    <div class="bg-white rounded p-4 shadow" style="max-width:380px;width:90%;margin:1rem">
+      <h5 class="fw-bold mb-2"><i class="bi bi-exclamation-triangle text-danger me-2"></i>Eliminar producto</h5>
+      <p class="text-muted mb-4">¿Estás seguro que quieres eliminar <strong>{{ deleteConfirm.product?.title }}</strong>? Esta acción no se puede deshacer.</p>
+      <div class="d-flex gap-2 justify-content-end">
+        <button class="btn btn-outline-secondary" @click="deleteConfirm.show=false">Cancelar</button>
+        <button class="btn btn-danger fw-bold" @click="doDeleteProduct">
+          <i class="bi bi-trash me-1"></i>Sí, eliminar
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- TOASTS -->
   <div class="ms-toast-wrap">
     <div v-for="t in toasts" :key="t.id" class="ms-toast" :class="t.type">{{ t.msg }}</div>
@@ -985,6 +1413,147 @@ const app = createApp({
     const orders = ref([]);
     const ordersLoading = ref(false);
 
+    // ── Mis Ventas ─────────────────────────────────────────────────────────
+    const sellerTab       = ref('list');
+    const myProducts      = ref({ data: [], total: 0 });
+    const myProductsLoading = ref(false);
+    const myProductSearch = ref('');
+    const myProductStatusFilter = ref('');
+    const productFormLoading = ref(false);
+    const deleteConfirm   = ref({ show: false, product: null });
+    const formErrors      = ref({});
+
+    const productForm = ref({
+      id: null, title: '', short_desc: '', description: '',
+      category_id: '', condition_type: 'new', price: 0,
+      compare_price: 0, stock: 0, stock_alert: 5,
+      delivery_type: 'shipping', free_shipping: false,
+      sku: '', external_link: '', weight_kg: 0, status: 'active'
+    });
+
+    const filteredMyProducts = computed(() => {
+      let list = myProducts.value.data || [];
+      if (myProductSearch.value) {
+        const q = myProductSearch.value.toLowerCase();
+        list = list.filter(p => p.title.toLowerCase().includes(q) || (p.sku||'').toLowerCase().includes(q));
+      }
+      if (myProductStatusFilter.value) {
+        list = list.filter(p => p.status === myProductStatusFilter.value);
+      }
+      return list;
+    });
+
+    function getCategoryName(id) {
+      const cat = categories.value.find(c => c.id == id);
+      return cat ? cat.name : '—';
+    }
+
+    function openProductForm(product) {
+      formErrors.value = {};
+      if (product) {
+        productForm.value = {
+          id: product.id, title: product.title || '',
+          short_desc: product.short_desc || '', description: product.description || '',
+          category_id: product.category_id || '', condition_type: product.condition_type || 'new',
+          price: product.price || 0, compare_price: product.compare_price || 0,
+          stock: product.stock || 0, stock_alert: product.stock_alert || 5,
+          delivery_type: product.delivery_type || 'shipping',
+          free_shipping: !!product.free_shipping,
+          sku: product.sku || '', external_link: product.external_link || '',
+          weight_kg: product.weight_kg || 0, status: product.status || 'active'
+        };
+      } else {
+        productForm.value = {
+          id: null, title: '', short_desc: '', description: '',
+          category_id: '', condition_type: 'new', price: 0,
+          compare_price: 0, stock: 0, stock_alert: 5,
+          delivery_type: 'shipping', free_shipping: false,
+          sku: '', external_link: '', weight_kg: 0, status: 'active'
+        };
+      }
+      sellerTab.value = 'form';
+    }
+
+    async function loadMyProducts() {
+      myProductsLoading.value = true;
+      try {
+        const r = await api('GET', '/my/products');
+        myProducts.value = {
+          data: Array.isArray(r.data) ? r.data : [],
+          total: r.total || 0
+        };
+      } catch (e) {
+        console.warn('loadMyProducts error:', e);
+        myProducts.value = { data: [], total: 0 };
+      } finally {
+        myProductsLoading.value = false;
+      }
+    }
+
+    function validateProductForm() {
+      const errs = {};
+      const f = productForm.value;
+      if (!f.title || f.title.trim().length < 5) errs.title = 'El título debe tener al menos 5 caracteres.';
+      if (!f.short_desc || f.short_desc.trim().length < 5) errs.short_desc = 'La descripción breve es requerida.';
+      if (!f.category_id) errs.category_id = 'Selecciona una categoría.';
+      if (!f.price || f.price <= 0) errs.price = 'El precio debe ser mayor a 0.';
+      if (f.stock === '' || f.stock < 0) errs.stock = 'El stock no puede ser negativo.';
+      if (f.external_link && !/^https?:\/\/.+/.test(f.external_link)) errs.external_link = 'URL inválida (debe empezar con http:// o https://)';
+      return errs;
+    }
+
+    async function submitProductForm() {
+      formErrors.value = {};
+      const errs = validateProductForm();
+      if (Object.keys(errs).length) { formErrors.value = errs; return; }
+      productFormLoading.value = true;
+      try {
+        const body = { ...productForm.value };
+        if (body.compare_price <= 0) delete body.compare_price;
+        if (!body.sku) delete body.sku;
+        if (!body.external_link) delete body.external_link;
+        if (body.weight_kg <= 0) delete body.weight_kg;
+        if (body.id) {
+          await api('PUT', `/products/${body.id}`, body);
+          toast('Producto actualizado correctamente.');
+        } else {
+          await api('POST', '/products', body);
+          toast('Producto publicado con éxito. ¡Ya está visible!');
+        }
+        await loadMyProducts();
+        sellerTab.value = 'list';
+      } catch (e) {
+        formErrors.value = { _global: e.error || 'Error al guardar el producto.' };
+      } finally {
+        productFormLoading.value = false;
+      }
+    }
+
+    async function toggleProductStatus(product) {
+      const newStatus = product.status === 'active' ? 'paused' : 'active';
+      try {
+        await api('PUT', `/products/${product.id}`, { status: newStatus });
+        product.status = newStatus;
+        toast(newStatus === 'active' ? 'Producto activado.' : 'Producto pausado.');
+      } catch (e) { toast('Error al cambiar estado.', 'error'); }
+    }
+
+    function confirmDeleteProduct(product) {
+      deleteConfirm.value = { show: true, product };
+    }
+
+    async function doDeleteProduct() {
+      const product = deleteConfirm.value.product;
+      if (!product) return;
+      try {
+        await api('DELETE', `/products/${product.id}`);
+        toast('Producto eliminado.');
+        deleteConfirm.value = { show: false, product: null };
+        await loadMyProducts();
+        sellerTab.value = 'list';
+      } catch (e) { toast('Error al eliminar.', 'error'); }
+    }
+
     const adminDash = ref({});
     const adminUsers = ref([]);
     const adminProducts = ref([]);
@@ -1037,6 +1606,7 @@ const app = createApp({
       if (view === 'products') loadProducts();
       if (view === 'cart') loadCart();
       if (view === 'orders') loadOrders();
+      if (view === 'my-products') { sellerTab.value = 'list'; loadMyProducts(); }
       if (view === 'admin') { adminView.value = 'dashboard'; loadDashboard(); }
     }
 
@@ -1222,6 +1792,10 @@ const app = createApp({
       loadProducts, viewProduct, filterByCategory, doSearch, applyFilters, resetFilters, changePage,
       addToCart, updateCartItem, removeCartItem, toggleWishlist,
       loadOrders, loadDashboard, loadAdminUsers, loadAdminProducts, loadAdminOrders,
+      sellerTab, myProducts, myProductsLoading, myProductSearch, myProductStatusFilter,
+      productForm, productFormLoading, formErrors, filteredMyProducts, deleteConfirm,
+      openProductForm, loadMyProducts, submitProductForm, toggleProductStatus,
+      confirmDeleteProduct, doDeleteProduct, getCategoryName,
       updateAdminUser, updateOrderStatus,
       formatCLP, formatDate, statusBadge, statusLabel,
     };
