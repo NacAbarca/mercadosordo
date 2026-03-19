@@ -426,7 +426,7 @@
         <a href="#" class="text-primary text-decoration-none small fw-bold" @click.prevent="navigate('products')">Ver todo <i class="bi bi-chevron-right"></i></a>
       </div>
       <div class="row g-3 mb-4">
-        <div class="col-6 col-sm-4 col-md-3 col-xl-2" v-for="p in products.data.slice(0,12)" :key="p.id">
+        <div class="col-6 col-sm-4 col-md-3 col-xl-2" v-for="p in (products.data || []).slice(0,12)" :key="p.id">
           <product-card :product="p" @add-cart="addToCart" @wishlist="toggleWishlist" @click="viewProduct(p)"></product-card>
         </div>
       </div>
@@ -479,7 +479,7 @@
             </select>
           </div>
           <div class="row g-3">
-            <div class="col-6 col-sm-4 col-lg-3" v-for="p in products.data" :key="p.id">
+            <div class="col-6 col-sm-4 col-lg-3" v-for="p in (products.data || [])" :key="p.id">
               <product-card :product="p" @add-cart="addToCart" @wishlist="toggleWishlist" @click="viewProduct(p)"></product-card>
             </div>
           </div>
@@ -489,7 +489,7 @@
                 <li class="page-item" :class="{disabled: products.current_page <= 1}">
                   <a class="page-link" href="#" @click.prevent="changePage(products.current_page-1)">‹</a>
                 </li>
-                <li class="page-item" v-for="p in products.last_page" :key="p" :class="{active: p===products.current_page}">
+                <li class="page-item" v-for="p in (products.last_page || 1)" :key="p" :class="{active: p===products.current_page}">
                   <a class="page-link" href="#" @click.prevent="changePage(p)">{{p}}</a>
                 </li>
                 <li class="page-item" :class="{disabled: products.current_page >= products.last_page}">
@@ -1100,8 +1100,17 @@ const app = createApp({
           ...(filters.value.condition && { condition: filters.value.condition }),
         });
         const r = await api('GET', `/products?${params}`);
-        products.value = { ...r, loading: false };
-      } catch { products.value.loading = false; }
+        products.value = {
+          data: Array.isArray(r.data) ? r.data : [],
+          total: r.total || 0,
+          current_page: r.current_page || 1,
+          last_page: r.last_page || 1,
+          loading: false
+        };
+      } catch (e) {
+        console.warn('loadProducts error:', e);
+        products.value = { data: [], total: 0, current_page: 1, last_page: 1, loading: false };
+      }
     }
 
     async function loadCategories() {

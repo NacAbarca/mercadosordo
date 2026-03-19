@@ -12,7 +12,19 @@ class DB
 
     private function __construct()
     {
-        $cfg = require __DIR__ . '/../config/database.php';
+        // Usar BASE_PATH si está disponible (definido en index.php), sino resolver desde src/
+        $base = defined('BASE_PATH') ? BASE_PATH : realpath(__DIR__ . DIRECTORY_SEPARATOR . '..');
+        $cfgFile = $base . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'database.php';
+
+        if (!file_exists($cfgFile)) {
+            throw new \RuntimeException(
+                "No se encontró config/database.php\n" .
+                "BASE_PATH: {$base}\n" .
+                "Crea el archivo copiando config/database.example.php"
+            );
+        }
+
+        $cfg = require $cfgFile;
         $dsn = "mysql:host={$cfg['host']};port={$cfg['port']};dbname={$cfg['database']};charset={$cfg['charset']}";
         $this->pdo = new \PDO($dsn, $cfg['username'], $cfg['password'], $cfg['options']);
     }
@@ -227,8 +239,11 @@ class Response
     public static function view(string $view, array $data = []): void
     {
         extract($data);
-        $path = __DIR__ . "/../views/{$view}.php";
-        if (!file_exists($path)) { self::json(['error' => "View [{$view}] not found"], 500); }
+        $base = defined('BASE_PATH') ? BASE_PATH : realpath(__DIR__ . DIRECTORY_SEPARATOR . '..');
+        $path = $base . DIRECTORY_SEPARATOR . 'views' . DIRECTORY_SEPARATOR . $view . '.php';
+        if (!file_exists($path)) {
+            self::json(['error' => "View [{$view}] not found", 'path_tried' => $path], 500);
+        }
         require $path;
     }
 
