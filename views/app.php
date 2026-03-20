@@ -902,6 +902,86 @@
 
             </div><!-- /row -->
 
+            <!-- ── GALERÍA DE IMÁGENES ── -->
+            <div class="col-12 mt-3">
+              <label class="form-label fw-bold">
+                <i class="bi bi-images me-1 text-primary"></i>
+                Fotos del producto
+                <span class="text-muted fw-normal small">(máx. 8 imágenes · JPG/PNG/WebP · 5MB c/u)</span>
+              </label>
+
+              <!-- Zona de drop / selección -->
+              <div class="border-2 border-dashed rounded p-4 text-center mb-3"
+                   style="border: 2px dashed #3483FA; background:#f8fbff; cursor:pointer; transition: background .2s"
+                   @click="triggerImageUpload"
+                   @dragover.prevent="imgDragOver=true"
+                   @dragleave="imgDragOver=false"
+                   @drop.prevent="onImageDrop"
+                   :style="imgDragOver ? 'background:#e3f0ff' : ''">
+                <i class="bi bi-cloud-arrow-up" style="font-size:2.5rem;color:#3483FA"></i>
+                <p class="mb-1 fw-bold mt-2">Arrastra fotos aquí o haz clic para seleccionar</p>
+                <p class="text-muted small mb-0">La primera imagen será la principal del anuncio</p>
+                <input type="file" id="productImgInput" multiple accept="image/jpeg,image/png,image/webp"
+                       style="display:none" @change="onImagesSelected">
+              </div>
+
+              <!-- Preview grid -->
+              <div class="row g-2" v-if="productImages.length > 0">
+                <div class="col-4 col-md-3 col-lg-2" v-for="(img, idx) in productImages" :key="img.id || idx">
+                  <div class="position-relative rounded overflow-hidden border"
+                       :class="idx===0 ? 'border-primary border-2' : 'border-light'"
+                       style="aspect-ratio:1;background:#f8f8f8">
+                    <img :src="img.preview || img.url" class="w-100 h-100" style="object-fit:cover">
+                    <!-- Badge principal -->
+                    <span v-if="idx===0"
+                          class="position-absolute top-0 start-0 badge bg-primary m-1"
+                          style="font-size:.6rem">Principal</span>
+                    <!-- Overlay acciones -->
+                    <div class="position-absolute top-0 end-0 d-flex flex-column gap-1 m-1">
+                      <button type="button" class="btn btn-sm btn-light p-1" style="width:24px;height:24px;font-size:.65rem"
+                              @click.stop="setPrimaryImage(idx)" title="Hacer principal" v-if="idx!==0">
+                        <i class="bi bi-star"></i>
+                      </button>
+                      <button type="button" class="btn btn-sm btn-danger p-1" style="width:24px;height:24px;font-size:.65rem"
+                              @click.stop="removeImage(idx)" title="Eliminar">
+                        <i class="bi bi-x-lg"></i>
+                      </button>
+                    </div>
+                    <!-- Progreso upload -->
+                    <div v-if="img.uploading"
+                         class="position-absolute inset-0 d-flex align-items-center justify-content-center"
+                         style="background:rgba(255,255,255,.8);inset:0">
+                      <div class="spinner-border text-primary spinner-border-sm"></div>
+                    </div>
+                    <div v-if="img.error"
+                         class="position-absolute bottom-0 start-0 end-0 bg-danger text-white text-center"
+                         style="font-size:.65rem;padding:2px">Error</div>
+                  </div>
+                  <!-- Reordenar -->
+                  <div class="d-flex gap-1 mt-1 justify-content-center">
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:.65rem"
+                            @click="moveImage(idx,-1)" :disabled="idx===0">◀</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:.65rem"
+                            @click="moveImage(idx,1)" :disabled="idx===productImages.length-1">▶</button>
+                  </div>
+                </div>
+
+                <!-- Agregar más -->
+                <div class="col-4 col-md-3 col-lg-2" v-if="productImages.length < 8">
+                  <div class="rounded border d-flex align-items-center justify-content-center"
+                       style="aspect-ratio:1;cursor:pointer;background:#f8f8f8;border-style:dashed!important"
+                       @click="triggerImageUpload">
+                    <i class="bi bi-plus-lg text-muted" style="font-size:1.5rem"></i>
+                  </div>
+                </div>
+              </div>
+
+              <div class="alert alert-danger mt-2 py-2 small" v-if="imgErrors.length">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                <span v-for="e in imgErrors" :key="e">{{ e }} </span>
+              </div>
+            </div>
+
             <!-- Errores globales -->
             <div class="alert alert-danger mt-3 mb-0" v-if="formErrors._global">
               <i class="bi bi-exclamation-triangle me-2"></i>{{ formErrors._global }}
@@ -1872,6 +1952,128 @@ const app = createApp({
 
     // ── Mis Ventas ─────────────────────────────────────────────────────────
     const sellerTab       = ref('list');
+    // ── Galería imágenes producto ───────────────────────────────────────
+    const productImages   = ref([]);   // [{id, url, preview, file, uploading, error, is_primary}]
+    const imgErrors       = ref([]);
+    const imgDragOver     = ref(false);
+
+    function triggerImageUpload() {
+      document.getElementById('productImgInput').click();
+    }
+
+    function validateImageFile(file) {
+      const allowed = ['image/jpeg','image/png','image/webp'];
+      if (!allowed.includes(file.type)) return `${file.name}: formato no permitido.`;
+      if (file.size > 5 * 1024 * 1024) return `${file.name}: supera 5MB.`;
+      return null;
+    }
+
+    function addImageFiles(files) {
+      imgErrors.value = [];
+      const remaining = 8 - productImages.value.length;
+      const toAdd = Array.from(files).slice(0, remaining);
+      if (files.length > remaining) {
+        imgErrors.value.push(`Solo puedes agregar ${remaining} imagen(es) más.`);
+      }
+      toAdd.forEach(file => {
+        const err = validateImageFile(file);
+        if (err) { imgErrors.value.push(err); return; }
+        const reader = new FileReader();
+        const imgObj = { id: null, url: null, preview: null, file, uploading: false, error: false, is_primary: productImages.value.length === 0 };
+        reader.onload = e => { imgObj.preview = e.target.result; };
+        reader.readAsDataURL(file);
+        productImages.value.push(imgObj);
+      });
+    }
+
+    function onImagesSelected(e) { addImageFiles(e.target.files); e.target.value = ''; }
+    function onImageDrop(e)      { imgDragOver.value = false; addImageFiles(e.dataTransfer.files); }
+
+    function removeImage(idx) {
+      if (productImages.value[idx].id) {
+        deleteProductImage(productImages.value[idx].id);
+      }
+      productImages.value.splice(idx, 1);
+      if (productImages.value.length > 0) productImages.value[0].is_primary = true;
+    }
+
+    function setPrimaryImage(idx) {
+      productImages.value.forEach((img, i) => img.is_primary = i === idx);
+      const [img] = productImages.value.splice(idx, 1);
+      productImages.value.unshift(img);
+    }
+
+    function moveImage(idx, dir) {
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= productImages.value.length) return;
+      const tmp = productImages.value[idx];
+      productImages.value[idx]    = productImages.value[newIdx];
+      productImages.value[newIdx] = tmp;
+      productImages.value[0].is_primary = true;
+    }
+
+    async function uploadProductImages(productId) {
+      const token   = localStorage.getItem('ms_token');
+      const pending = productImages.value.filter(img => img.file && !img.id);
+      for (let i = 0; i < pending.length; i++) {
+        const img = pending[i];
+        img.uploading = true;
+        try {
+          const fd = new FormData();
+          fd.append('image', img.file);
+          fd.append('sort_order', productImages.value.indexOf(img));
+          fd.append('is_primary', img.is_primary ? '1' : '0');
+          const res  = await fetch(`/api/products/${productId}/images`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: fd
+          });
+          const data = await res.json();
+          if (!res.ok) throw data;
+          img.id      = data.id;
+          img.url     = data.url;
+          img.error   = false;
+        } catch (e) {
+          img.error = true;
+          imgErrors.value.push(`Error al subir imagen ${i + 1}.`);
+        } finally {
+          img.uploading = false;
+        }
+      }
+      // Actualizar sort_order de todas
+      await syncImageOrder(productId);
+    }
+
+    async function syncImageOrder(productId) {
+      const token = localStorage.getItem('ms_token');
+      const order = productImages.value
+        .filter(img => img.id)
+        .map((img, i) => ({ id: img.id, sort_order: i, is_primary: i === 0 ? 1 : 0 }));
+      if (!order.length) return;
+      try {
+        await fetch(`/api/products/${productId}/images/order`, {
+          method: 'PATCH',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ images: order })
+        });
+      } catch {}
+    }
+
+    async function deleteProductImage(imageId) {
+      try { await api('DELETE', `/products/images/${imageId}`); } catch {}
+    }
+
+    function loadProductImages(product) {
+      if (product.images && product.images.length) {
+        productImages.value = product.images.map((img, i) => ({
+          id: img.id, url: img.url, preview: null,
+          file: null, uploading: false, error: false,
+          is_primary: img.is_primary || i === 0
+        }));
+      } else {
+        productImages.value = [];
+      }
+    }
     const myProducts      = ref({ data: [], total: 0 });
     const myProductsLoading = ref(false);
     const myProductSearch = ref('');
@@ -1908,6 +2110,7 @@ const app = createApp({
     function openProductForm(product) {
       formErrors.value = {};
       if (product) {
+        loadProductImages(product);
         productForm.value = {
           id: product.id, title: product.title || '',
           short_desc: product.short_desc || '', description: product.description || '',
@@ -1920,6 +2123,7 @@ const app = createApp({
           weight_kg: product.weight_kg || 0, status: product.status || 'active'
         };
       } else {
+        productImages.value = [];
         productForm.value = {
           id: null, title: '', short_desc: '', description: '',
           category_id: '', condition_type: 'new', price: 0,
@@ -1961,23 +2165,31 @@ const app = createApp({
 
     async function submitProductForm() {
       if (!checkRut()) return;
-      formErrors.value = {};
+      formErrors.value = {}; imgErrors.value = [];
       const errs = validateProductForm();
       if (Object.keys(errs).length) { formErrors.value = errs; return; }
       productFormLoading.value = true;
       try {
         const body = { ...productForm.value };
-        if (body.compare_price <= 0) delete body.compare_price;
-        if (!body.sku) delete body.sku;
+        if (!body.compare_price || body.compare_price <= 0) delete body.compare_price;
+        if (!body.sku)           delete body.sku;
         if (!body.external_link) delete body.external_link;
-        if (body.weight_kg <= 0) delete body.weight_kg;
+        if (!body.weight_kg || body.weight_kg <= 0) delete body.weight_kg;
+
+        let productId = body.id;
         if (body.id) {
           await api('PUT', `/products/${body.id}`, body);
-          toast('Producto actualizado correctamente.');
+          toast('Producto actualizado.');
         } else {
-          await api('POST', '/products', body);
-          toast('Producto publicado con éxito. ¡Ya está visible!');
+          const r = await api('POST', '/products', body);
+          productId = r.id;
+          toast('Producto publicado. Subiendo imágenes...');
         }
+        // Subir imágenes pendientes
+        if (productImages.value.some(img => img.file)) {
+          await uploadProductImages(productId);
+        }
+        toast(body.id ? 'Producto actualizado correctamente ✓' : '¡Producto publicado con éxito! ✓');
         await loadMyProducts();
         sellerTab.value = 'list';
       } catch (e) {
@@ -2548,6 +2760,9 @@ const app = createApp({
       sellerTab, myProducts, myProductsLoading, myProductSearch, myProductStatusFilter,
       productForm, productFormLoading, formErrors, filteredMyProducts, deleteConfirm,
       openProductForm, loadMyProducts, submitProductForm, toggleProductStatus,
+      productImages, imgErrors, imgDragOver,
+      triggerImageUpload, onImagesSelected, onImageDrop,
+      removeImage, setPrimaryImage, moveImage, loadProductImages,
       confirmDeleteProduct, doDeleteProduct, getCategoryName,
       updateAdminUser, updateOrderStatus,
       formatCLP, formatDate, statusBadge, statusLabel,

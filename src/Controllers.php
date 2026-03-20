@@ -754,6 +754,126 @@ class ProfileController
 }
 
 // ============================================================
+// ProductImageController — /api/products/{id}/images
+// ============================================================
+class ProductImageController
+{
+    private function uploadDir(): string
+    {
+        $base = defined('BASE_PATH') ? BASE_PATH : dirname(__DIR__);
+        $dir  = $base . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'products';
+        if (!is_dir($dir)) mkdir($dir, 0755, true);
+        return $dir;
+    }
+
+    public function store(Request $req): void
+    {
+        $productId = (int)$req->param('id');
+        $db        = DB::getInstance();
+
+        // Verificar ownership
+        $product = $db->fetch("SELECT seller_id FROM products WHERE id=?", [$productId]);
+        if (!$product) Response::json(['error' => 'Producto no encontrado.'], 404);
+        if ((int)$product['seller_id'] !== (int)Auth::id() && !Auth::is('admin')) {
+            Response::json(['error' => 'Forbidden'], 403);
+        }
+
+        // Verificar límite 8 imágenes
+        $count = $db->fetch("SELECT COUNT(*) AS c FROM product_images WHERE product_id=?", [$productId])['c'];
+        if ($count >= 8) Response::json(['error' => 'Máximo 8 imágenes por producto.'], 422);
+
+        if (empty($_FILES['image'])) Response::json(['error' => 'No se recibió imagen.'], 400);
+
+        $file     = $_FILES['image'];
+        $allowed  = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+        $mimeType = mime_content_type($file['tmp_name']);
+
+        if (!isset($allowed[$mimeType])) {
+            Response::json(['error' => 'Formato no permitido. Solo JPG, PNG o WebP.'], 422);
+        }
+        if ($file['size'] > 5 * 1024 * 1024) {
+            Response::json(['error' => 'La imagen no puede superar 5MB.'], 422);
+        }
+
+        $ext       = $allowed[$mimeType];
+        $filename  = 'prod_' . $productId . '_' . uniqid() . '.' . $ext;
+        $dest      = $this->uploadDir() . DIRECTORY_SEPARATOR . $filename;
+
+        if (!move_uploaded_file($file['tmp_name'], $dest)) {
+            Response::json(['error' => 'Error al guardar la imagen.'], 500);
+        }
+
+        $isPrimary  = (int)($req->input('is_primary', 0));
+        $sortOrder  = (int)($req->input('sort_order', $count));
+
+        // Si es primaria, quitar primary a las demás
+        if ($isPrimary) {
+            $db->query("UPDATE product_images SET is_primary=0 WHERE product_id=?", [$productId]);
+        }
+
+        $url = '/uploads/products/' . $filename;
+        $id  = $db->insert('product_images', [
+            'product_id' => $productId,
+            'url'        => $url,
+            'alt_text'   => $req->input('alt_text') ?: null,
+            'sort_order' => $sortOrder,
+            'is_primary' => $isPrimary ? 1 : 0,
+        ]);
+
+        Response::json(['id' => $id, 'url' => $url, 'message' => 'Imagen subida.'], 201);
+    }
+
+    public function updateOrder(Request $req): void
+    {
+        $productId = (int)$req->param('id');
+        $db        = DB::getInstance();
+        $product   = $db->fetch("SELECT seller_id FROM products WHERE id=?", [$productId]);
+        if (!$product || ((int)$product['seller_id'] !== (int)Auth::id() && !Auth::is('admin'))) {
+            Response::json(['error' => 'Forbidden'], 403);
+        }
+        $images = $req->input('images', []);
+        foreach ($images as $img) {
+            if (empty($img['id'])) continue;
+            $db->update('product_images',
+                ['sort_order' => (int)($img['sort_order'] ?? 0), 'is_primary' => (int)($img['is_primary'] ?? 0)],
+                'id=? AND product_id=?', [(int)$img['id'], $productId]
+            );
+        }
+        Response::json(['message' => 'Orden actualizado.']);
+    }
+
+    public function destroy(Request $req): void
+    {
+        $imageId = (int)$req->param('imageId');
+        $db      = DB::getInstance();
+        $img     = $db->fetch(
+            "SELECT pi.*, p.seller_id FROM product_images pi
+             JOIN products p ON p.id = pi.product_id
+             WHERE pi.id=?", [$imageId]
+        );
+        if (!$img) Response::json(['error' => 'Imagen no encontrada.'], 404);
+        if ((int)$img['seller_id'] !== (int)Auth::id() && !Auth::is('admin')) {
+            Response::json(['error' => 'Forbidden'], 403);
+        }
+
+        // Eliminar archivo físico
+        $base = defined('BASE_PATH') ? BASE_PATH : dirname(__DIR__);
+        $file = $base . '/public' . $img['url'];
+        if (file_exists($file)) @unlink($file);
+
+        $db->delete('product_images', 'id=?', [$imageId]);
+
+        // Si era primaria, asignar la siguiente
+        if ($img['is_primary']) {
+            $next = $db->fetch("SELECT id FROM product_images WHERE product_id=? ORDER BY sort_order LIMIT 1", [$img['product_id']]);
+            if ($next) $db->update('product_images', ['is_primary' => 1], 'id=?', [$next['id']]);
+        }
+
+        Response::json(['message' => 'Imagen eliminada.']);
+    }
+}
+
+// ============================================================
 // ReviewController
 // ============================================================
 class ReviewController
