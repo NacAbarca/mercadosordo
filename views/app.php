@@ -650,7 +650,7 @@
               <tbody>
                 <tr v-for="p in filteredMyProducts" :key="p.id">
                   <td>
-                    <img :src="p.primary_image || 'https://via.placeholder.com/48'"
+                    <img :src="p.primary_image || '/uploads/no-image.png'"
                          class="rounded" style="width:48px;height:48px;object-fit:contain;background:#f8f8f8">
                   </td>
                   <td>
@@ -1622,7 +1622,7 @@
       <div class="col-md-6">
         <div class="product-images">
           <div class="main-img">
-            <img :src="activeImage || '/public/uploads/no-image.png'" :alt="selectedProduct.title" style="max-height:100%;object-fit:contain">
+            <img :src="activeImage || '/uploads/no-image.png'" :alt="selectedProduct.title" style="max-height:100%;object-fit:contain">
           </div>
           <div class="thumbs" v-if="selectedProduct.images?.length > 1">
             <img v-for="img in selectedProduct.images" :key="img.id" :src="img.url" class="thumb" :class="{active: activeImage===img.url}" @click="activeImage=img.url">
@@ -1718,163 +1718,6 @@
 
     <!-- ─── CHECKOUT ─── -->
     <template v-if="currentView === 'checkout'">
-      <div class="container py-4" style="max-width:960px">
-        <h3 class="section-title mb-4"><i class="bi bi-bag-check me-2 text-primary"></i>Finalizar compra</h3>
-
-        <!-- Steps -->
-        <div class="d-flex align-items-center gap-2 mb-4">
-          <div v-for="(step,i) in ['Resumen','Dirección','Pago']" :key="i"
-               class="d-flex align-items-center gap-2">
-            <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold"
-                 style="width:32px;height:32px;font-size:.85rem"
-                 :class="checkoutStep > i ? 'bg-success text-white' : checkoutStep === i ? 'bg-primary text-white' : 'bg-light text-muted border'">
-              <i class="bi bi-check-lg" v-if="checkoutStep > i"></i>
-              <span v-else>{{ i+1 }}</span>
-            </div>
-            <span class="fw-bold small" :class="checkoutStep === i ? 'text-primary' : 'text-muted'">{{ step }}</span>
-            <i class="bi bi-chevron-right text-muted small" v-if="i < 2"></i>
-          </div>
-        </div>
-
-        <div class="row g-4">
-          <div class="col-md-8">
-
-            <!-- Paso 1: Resumen carrito -->
-            <div v-if="checkoutStep === 0" class="bg-white rounded shadow-sm p-4">
-              <h5 class="fw-bold mb-3">Resumen de tu compra</h5>
-              <div v-for="item in cart.items" :key="item.id" class="d-flex gap-3 align-items-center mb-3 pb-3 border-bottom">
-                <img :src="item.image || 'https://via.placeholder.com/60'" style="width:60px;height:60px;object-fit:contain;background:#f8f8f8" class="rounded">
-                <div class="flex-grow-1">
-                  <div class="fw-bold small">{{ item.title }}</div>
-                  <div class="text-muted small">Cantidad: {{ item.quantity }}</div>
-                </div>
-                <div class="fw-bold text-primary">{{ formatCLP(item.price * item.quantity) }}</div>
-              </div>
-              <button class="btn btn-primary fw-bold w-100 mt-2" @click="checkoutStep=1">
-                Continuar <i class="bi bi-arrow-right ms-1"></i>
-              </button>
-            </div>
-
-            <!-- Paso 2: Dirección -->
-            <div v-if="checkoutStep === 1" class="bg-white rounded shadow-sm p-4">
-              <h5 class="fw-bold mb-3">Selecciona dirección de envío</h5>
-              <div v-if="addressesLoading" class="text-center py-3"><div class="spinner-border text-primary"></div></div>
-              <div v-else>
-                <div v-if="addresses.length === 0" class="text-center py-4 text-muted">
-                  <i class="bi bi-geo-alt fs-1"></i>
-                  <p class="mt-2">No tienes direcciones guardadas.</p>
-                  <button class="btn btn-outline-primary btn-sm" @click="navigate('profile'); profileTab='addresses'">
-                    Agregar dirección
-                  </button>
-                </div>
-                <div v-for="addr in addresses" :key="addr.id"
-                     class="p-3 rounded border mb-2"
-                     :class="selectedAddressId === addr.id ? 'border-primary bg-primary bg-opacity-10' : ''"
-                     style="cursor:pointer" @click="selectedAddressId = addr.id">
-                  <div class="d-flex align-items-center gap-2">
-                    <i class="bi" :class="selectedAddressId===addr.id ? 'bi-record-circle-fill text-primary' : 'bi-circle text-muted'"></i>
-                    <div>
-                      <div class="fw-bold small">{{ addr.label }} — {{ addr.full_name }}</div>
-                      <div class="text-muted small">{{ addr.address }}, {{ addr.city }}, {{ addr.region }}</div>
-                    </div>
-                    <span class="badge bg-success ms-auto" v-if="addr.is_default">Principal</span>
-                  </div>
-                </div>
-              </div>
-              <div class="d-flex gap-2 mt-3">
-                <button class="btn btn-outline-secondary" @click="checkoutStep=0"><i class="bi bi-arrow-left me-1"></i>Volver</button>
-                <button class="btn btn-primary fw-bold flex-grow-1" :disabled="!selectedAddressId" @click="checkoutStep=2">
-                  Continuar <i class="bi bi-arrow-right ms-1"></i>
-                </button>
-              </div>
-            </div>
-
-            <!-- Paso 3: Pago -->
-            <div v-if="checkoutStep === 2" class="bg-white rounded shadow-sm p-4">
-              <h5 class="fw-bold mb-3">Método de pago</h5>
-
-              <!-- Estado orden -->
-              <div v-if="checkoutOrderId && !mpInitPoint" class="text-center py-3">
-                <div class="spinner-border text-primary mb-2"></div>
-                <p class="text-muted small">Preparando tu pago...</p>
-              </div>
-
-              <!-- Botón MP -->
-              <div v-if="mpInitPoint" class="text-center py-4">
-                <img src="https://www.mercadopago.com/org-img/MP3/home/logomp.png" style="height:36px" class="mb-3">
-                <p class="text-muted small mb-4">Serás redirigido a Mercado Pago para completar el pago de forma segura.</p>
-                <a :href="mpInitPoint" class="btn btn-primary fw-bold px-5 py-3 w-100" style="font-size:1.1rem;background:#009ee3;border-color:#009ee3">
-                  <i class="bi bi-shield-check me-2"></i>Pagar {{ formatCLP(cart.total) }} con Mercado Pago
-                </a>
-                <p class="text-muted mt-3" style="font-size:.78rem">
-                  <i class="bi bi-lock me-1"></i>Pago 100% seguro · SSL · No guardamos datos de tarjeta
-                </p>
-              </div>
-
-              <!-- Error -->
-              <div class="alert alert-danger" v-if="checkoutError">
-                <i class="bi bi-exclamation-triangle me-2"></i>{{ checkoutError }}
-              </div>
-
-              <div class="d-flex gap-2 mt-3" v-if="!mpInitPoint">
-                <button class="btn btn-outline-secondary" @click="checkoutStep=1"><i class="bi bi-arrow-left me-1"></i>Volver</button>
-                <button class="btn btn-primary fw-bold flex-grow-1" @click="doCheckout" :disabled="checkoutLoading">
-                  <span v-if="checkoutLoading" class="spinner-border spinner-border-sm me-2"></span>
-                  <i class="bi bi-credit-card me-1" v-else></i>Proceder al pago
-                </button>
-              </div>
-            </div>
-
-            <!-- Confirmación -->
-            <div v-if="checkoutStep === 3" class="bg-white rounded shadow-sm p-4 text-center">
-              <i class="bi bi-check-circle-fill text-success" style="font-size:4rem"></i>
-              <h4 class="fw-bold mt-3">¡Pago recibido!</h4>
-              <p class="text-muted">Orden <strong>{{ checkoutOrderNumber }}</strong> creada correctamente.</p>
-              <p class="text-muted small">Recibirás un email con el seguimiento de tu compra.</p>
-              <div class="d-flex gap-2 justify-content-center mt-4">
-                <button class="btn btn-outline-primary" @click="navigate('orders')">Ver mis compras</button>
-                <button class="btn btn-primary" @click="navigate('home')">Seguir comprando</button>
-              </div>
-            </div>
-
-          </div>
-
-          <!-- Resumen lateral -->
-          <div class="col-md-4">
-            <div class="bg-white rounded shadow-sm p-4 sticky-top" style="top:80px">
-              <h6 class="fw-bold mb-3">Resumen del pedido</h6>
-              <div class="d-flex justify-content-between mb-2">
-                <span class="text-muted small">Subtotal ({{ cart.count }} items)</span>
-                <span>{{ formatCLP(cart.total) }}</span>
-              </div>
-              <div class="d-flex justify-content-between mb-2 text-success">
-                <span class="small">Envío</span><span>Gratis</span>
-              </div>
-              <hr>
-              <div class="d-flex justify-content-between fw-bold">
-                <span>Total</span>
-                <span class="text-primary fs-5">{{ formatCLP(cart.total) }}</span>
-              </div>
-              <div class="mt-3 pt-3 border-top">
-                <div class="d-flex align-items-center gap-2 small text-muted mb-1">
-                  <i class="bi bi-shield-check text-success"></i>Compra protegida
-                </div>
-                <div class="d-flex align-items-center gap-2 small text-muted mb-1">
-                  <i class="bi bi-arrow-counterclockwise text-success"></i>Devolución hasta 30 días
-                </div>
-                <div class="d-flex align-items-center gap-2 small text-muted">
-                  <i class="bi bi-lock text-success"></i>Pago 100% seguro
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </template>
-
-
-    <!-- ─── CHECKOUT ─── -->
-    <template v-if="currentView === 'checkout'">
       <div class="container py-4" style="max-width:980px">
         <h3 class="section-title mb-4"><i class="bi bi-bag-check me-2 text-primary"></i>Finalizar compra</h3>
 
@@ -1903,7 +1746,7 @@
               <h5 class="fw-bold mb-3">Resumen de tu compra</h5>
               <div v-for="item in cart.items" :key="item.id"
                    class="d-flex gap-3 align-items-center mb-3 pb-3 border-bottom">
-                <img :src="item.image||'https://via.placeholder.com/60'"
+                <img :src="item.image||'/uploads/no-image.png'"
                      style="width:60px;height:60px;object-fit:contain;background:#f8f8f8" class="rounded border">
                 <div class="flex-grow-1">
                   <div class="fw-bold small">{{item.title}}</div>
@@ -2107,7 +1950,7 @@
           <button class="btn btn-primary" @click="navigate('home')">Ver productos</button>
         </div>
         <div v-for="item in cart.items" :key="item.id" class="cart-item">
-          <img :src="item.image || '/public/uploads/no-image.png'" :alt="item.title">
+          <img :src="item.image || '/uploads/no-image.png'" :alt="item.title">
           <div class="flex-grow-1">
             <p class="fw-bold mb-1">{{ item.title }}</p>
             <p class="text-success small mb-2" v-if="item.free_shipping"><i class="bi bi-truck me-1"></i>Envío gratis</p>
@@ -2372,7 +2215,7 @@ const ProductCard = {
         <i class="bi" :class="product.wishlisted ? 'bi-heart-fill' : 'bi-heart'"></i>
       </button>
       <div class="img-wrap">
-        <img :src="product.primary_image || 'https://via.placeholder.com/200'" :alt="product.title" loading="lazy">
+        <img :src="product.primary_image || '/uploads/no-image.png'" :alt="product.title" loading="lazy">
       </div>
       <div class="card-body">
         <div v-if="product.compare_price" class="compare-price">{{ fmtCLP(product.compare_price) }}</div>
