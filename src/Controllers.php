@@ -174,7 +174,6 @@ class ProductController
             'title'          => trim($data['title']),
             'slug'           => $slug,
             'description'    => $req->input('description') ?: null,
-            'short_desc'     => $req->input('short_desc') ?: null,
             'price'          => (float) $data['price'],
             'compare_price'  => ($comparePrice !== null && $comparePrice !== '' && (float)$comparePrice > 0)
                                     ? (float) $comparePrice : null,
@@ -186,8 +185,11 @@ class ProductController
                                     ? (float) $weightKg : null,
             'status'         => in_array($req->input('status'), ['active','draft','paused']) ? $req->input('status') : 'active',
             'sku'            => $req->input('sku') ?: null,
+            'short_desc'     => $req->input('short_desc') ?: null,
             'meta_title'     => $req->input('short_desc') ? substr($req->input('short_desc'), 0, 255) : null,
             'meta_desc'      => $req->input('short_desc') ?: null,
+            'delivery_type'  => in_array($req->input('delivery_type'), ['shipping','pickup','both']) ? $req->input('delivery_type') : 'shipping',
+            'external_link'  => $req->input('external_link') ?: null,
             'featured'       => 0,
         ]);
         Response::json(['id' => $id, 'slug' => $slug], 201);
@@ -203,7 +205,7 @@ class ProductController
             Response::json(['error' => 'Forbidden'], 403);
         }
         $raw     = $req->all();
-        $allowed = ['title','description','short_desc','price','compare_price','stock','stock_alert',
+        $allowed = ['title','description','price','compare_price','stock','stock_alert',
                     'condition_type','free_shipping','status','category_id','sku',
                     'weight_kg','meta_desc','meta_title','featured'];
         $data    = array_intersect_key($raw, array_flip($allowed));
@@ -509,6 +511,181 @@ class AdminController
 }
 
 // ============================================================
+// ProfileController — /api/profile/*
+// ============================================================
+class ProfileController
+{
+    // ── Validar RUT chileno formato xx.xxx.xxx-x ────────────
+    private function validateRut(string $rut): bool
+    {
+        $clean = preg_replace('/[^0-9kK]/', '', $rut);
+        if (strlen($clean) < 8 || strlen($clean) > 9) return false;
+        $body   = substr($clean, 0, -1);
+        $dv     = strtolower(substr($clean, -1));
+        $sum    = 0;
+        $factor = 2;
+        for ($i = strlen($body) - 1; $i >= 0; $i--) {
+            $sum += (int)$body[$i] * $factor;
+            $factor = $factor === 7 ? 2 : $factor + 1;
+        }
+        $remainder = 11 - ($sum % 11);
+        $expected  = match($remainder) {
+            11 => '0', 10 => 'k', default => (string)$remainder
+        };
+        return $dv === $expected;
+    }
+
+    private function formatRut(string $rut): string
+    {
+        $clean = preg_replace('/[^0-9kK]/', '', strtoupper($rut));
+        $dv    = substr($clean, -1);
+        $body  = substr($clean, 0, -1);
+        return number_format((int)$body, 0, '', '.') . '-' . $dv;
+    }
+
+    public function show(Request $req): void
+    {
+        $user = DB::getInstance()->fetch(
+            "SELECT id, uuid, name, email, role, status, phone, rut, rut_verified, avatar, created_at FROM users WHERE id=?",
+            [Auth::id()]
+        );
+        Response::json($user);
+    }
+
+    public function update(Request $req): void
+    {
+        $data   = $req->all();
+        $db     = DB::getInstance();
+        $user   = $db->fetch("SELECT rut FROM users WHERE id=?", [Auth::id()]);
+        $update = [];
+
+        if (!empty($data['name']))  $update['name']  = trim($data['name']);
+        if (isset($data['phone']))  $update['phone'] = trim($data['phone']) ?: null;
+
+        // RUT: obligatorio al registrarse, inmutable una vez guardado
+        if (!empty($data['rut'])) {
+            if (!empty($user['rut'])) {
+                Response::json(['error' => 'El RUT ya fue registrado y no puede modificarse por razones de seguridad.'], 403);
+            }
+            $rawRut = trim($data['rut']);
+            if (!$this->validateRut($rawRut)) {
+                Response::json(['error' => 'RUT inválido. Verifica el formato y el dígito verificador.'], 422);
+            }
+            $formatted = $this->formatRut($rawRut);
+            $exists = $db->fetch("SELECT id FROM users WHERE rut=? AND id != ?", [$formatted, Auth::id()]);
+            if ($exists) {
+                Response::json(['error' => 'Este RUT ya está asociado a otra cuenta.'], 409);
+            }
+            $update['rut']          = $formatted;
+            $update['rut_verified'] = 1;
+        }
+
+        if (empty($update)) Response::json(['error' => 'Sin datos para actualizar.'], 422);
+        $db->update('users', $update, 'id=?', [Auth::id()]);
+        Response::json(['message' => 'Perfil actualizado correctamente.']);
+    }
+
+    public function changePassword(Request $req): void
+    {
+        $data = $req->validate(['current' => 'required', 'password' => 'required|min:8']);
+        $db   = DB::getInstance();
+        $user = $db->fetch("SELECT * FROM users WHERE id=?", [Auth::id()]);
+        if (!password_verify($data['current'], $user['password'])) {
+            Response::json(['error' => 'La contraseña actual es incorrecta.'], 400);
+        }
+        $db->update('users', ['password' => Auth::hashPassword($data['password'])], 'id=?', [Auth::id()]);
+        // Revocar todos los tokens excepto el actual
+        $current = $req->bearerToken();
+        $db->query("DELETE FROM user_tokens WHERE user_id=? AND token != ?", [Auth::id(), $current]);
+        Response::json(['message' => 'Contraseña actualizada.']);
+    }
+
+    public function getAddresses(Request $req): void
+    {
+        $rows = DB::getInstance()->fetchAll(
+            "SELECT * FROM user_addresses WHERE user_id=? ORDER BY is_default DESC, id ASC",
+            [Auth::id()]
+        );
+        Response::json($rows);
+    }
+
+    public function storeAddress(Request $req): void
+    {
+        $data = $req->validate([
+            'full_name' => 'required|min:2',
+            'address'   => 'required|min:5',
+            'city'      => 'required',
+            'region'    => 'required',
+        ]);
+        $db        = DB::getInstance();
+        $isDefault = (bool)($req->input('is_default', false));
+        if ($isDefault) {
+            $db->query("UPDATE user_addresses SET is_default=0 WHERE user_id=?", [Auth::id()]);
+        }
+        $id = $db->insert('user_addresses', [
+            'user_id'    => Auth::id(),
+            'label'      => $req->input('label', 'Casa'),
+            'full_name'  => trim($data['full_name']),
+            'address'    => trim($data['address']),
+            'city'       => trim($data['city']),
+            'region'     => trim($data['region']),
+            'zip_code'   => $req->input('zip_code') ?: null,
+            'country'    => 'CL',
+            'is_default' => $isDefault ? 1 : 0,
+        ]);
+        Response::json(['id' => $id, 'message' => 'Dirección agregada.'], 201);
+    }
+
+    public function updateAddress(Request $req): void
+    {
+        $id   = (int)$req->param('id');
+        $db   = DB::getInstance();
+        $addr = $db->fetch("SELECT * FROM user_addresses WHERE id=? AND user_id=?", [$id, Auth::id()]);
+        if (!$addr) Response::json(['error' => 'Dirección no encontrada.'], 404);
+        $isDefault = filter_var($req->input('is_default', false), FILTER_VALIDATE_BOOLEAN);
+        if ($isDefault) {
+            $db->query("UPDATE user_addresses SET is_default=0 WHERE user_id=?", [Auth::id()]);
+        }
+        $db->update('user_addresses', [
+            'label'      => $req->input('label', $addr['label']),
+            'full_name'  => trim($req->input('full_name', $addr['full_name'])),
+            'address'    => trim($req->input('address', $addr['address'])),
+            'city'       => trim($req->input('city', $addr['city'])),
+            'region'     => trim($req->input('region', $addr['region'])),
+            'zip_code'   => $req->input('zip_code') ?: null,
+            'is_default' => $isDefault ? 1 : 0,
+        ], 'id=?', [$id]);
+        Response::json(['message' => 'Dirección actualizada.']);
+    }
+
+    public function setDefault(Request $req): void
+    {
+        $id = (int)$req->param('id');
+        $db = DB::getInstance();
+        $db->query("UPDATE user_addresses SET is_default=0 WHERE user_id=?", [Auth::id()]);
+        $db->update('user_addresses', ['is_default' => 1], 'id=? AND user_id=?', [$id, Auth::id()]);
+        Response::json(['message' => 'Dirección principal actualizada.']);
+    }
+
+    public function deleteAddress(Request $req): void
+    {
+        $id = (int)$req->param('id');
+        $db = DB::getInstance();
+        $ok = $db->delete('user_addresses', 'id=? AND user_id=?', [$id, Auth::id()]);
+        if (!$ok) Response::json(['error' => 'Dirección no encontrada.'], 404);
+        Response::json(['message' => 'Dirección eliminada.']);
+    }
+
+    public function deleteAccount(Request $req): void
+    {
+        $db = DB::getInstance();
+        $db->update('users', ['status' => 'suspended', 'email' => 'deleted_' . Auth::id() . '_' . time() . '@deleted.ms'], 'id=?', [Auth::id()]);
+        $db->delete('user_tokens', 'user_id=?', [Auth::id()]);
+        Response::json(['message' => 'Cuenta eliminada.']);
+    }
+}
+
+// ============================================================
 // ReviewController
 // ============================================================
 class ReviewController
@@ -532,3 +709,4 @@ class ReviewController
         Response::json(['id' => $id], 201);
     }
 }
+
