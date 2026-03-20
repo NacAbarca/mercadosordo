@@ -363,6 +363,7 @@
               <span>{{ auth.user.name.split(' ')[0] }}</span>
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="#" @click.prevent="navigate('profile')"><i class="bi bi-person me-2"></i>Mi perfil</a></li>
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('orders')"><i class="bi bi-box me-2"></i>Mis compras</a></li>
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('my-products')"><i class="bi bi-grid me-2"></i>Mis ventas</a></li>
               <li v-if="auth.user.role === 'admin'"><a class="dropdown-item" href="#" @click.prevent="navigate('admin')"><i class="bi bi-shield me-2"></i>Admin Panel</a></li>
@@ -386,6 +387,16 @@
       </div>
     </div>
   </nav>
+
+  <!-- BANNER ALERTA RUT -->
+  <div v-if="auth.user && !auth.user.rut && !isAdminRoute"
+       style="background:#e53935;color:white;padding:8px 16px;font-size:.85rem;font-weight:700;text-align:center;cursor:pointer"
+       @click="profileTab='data'; navigate('profile')"
+       class="d-flex align-items-center justify-content-center gap-2">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    Debes completar tu RUT chileno para operar en MercadoSordo — Haz clic aquí para completarlo
+    <i class="bi bi-arrow-right-circle-fill"></i>
+  </div>
 
   <!-- CATEGORIES NAV -->
   <nav class="cat-nav" v-if="!isAdminRoute">
@@ -981,6 +992,397 @@
 
     </template>
 
+
+    <!-- ─── PERFIL DE USUARIO ─── -->
+    <template v-if="currentView === 'profile'">
+      <div class="row g-4">
+
+        <!-- Sidebar perfil -->
+        <div class="col-md-3">
+          <div class="bg-white rounded shadow-sm p-4 text-center mb-3">
+            <div class="rounded-circle bg-primary d-inline-flex align-items-center justify-content-center mb-3"
+                 style="width:80px;height:80px;font-size:2rem;color:white">
+              {{ auth.user?.name?.charAt(0).toUpperCase() }}
+            </div>
+            <h5 class="fw-bold mb-0">{{ auth.user?.name }}</h5>
+            <p class="text-muted small mb-1">{{ auth.user?.email }}</p>
+            <span class="badge" :class="{'bg-danger':auth.user?.role==='admin','bg-info':auth.user?.role==='seller','bg-secondary':auth.user?.role==='buyer'}">
+              {{ auth.user?.role }}
+            </span>
+            <div class="mt-3 pt-3 border-top text-start">
+              <div class="small text-muted mb-1"><i class="bi bi-calendar me-1"></i>Miembro desde {{ formatDate(auth.user?.created_at) }}</div>
+            </div>
+          </div>
+          <!-- Nav lateral -->
+          <div class="bg-white rounded shadow-sm overflow-hidden">
+            <a href="#" class="d-flex align-items-center gap-2 px-3 py-3 border-bottom text-decoration-none"
+               :class="profileTab==='data' ? 'bg-primary bg-opacity-10 text-primary fw-bold' : 'text-dark'"
+               @click.prevent="profileTab='data'">
+              <i class="bi bi-person-gear"></i> Mis datos
+            </a>
+            <a href="#" class="d-flex align-items-center gap-2 px-3 py-3 border-bottom text-decoration-none"
+               :class="profileTab==='password' ? 'bg-primary bg-opacity-10 text-primary fw-bold' : 'text-dark'"
+               @click.prevent="profileTab='password'">
+              <i class="bi bi-shield-lock"></i> Contraseña
+            </a>
+            <a href="#" class="d-flex align-items-center gap-2 px-3 py-3 border-bottom text-decoration-none"
+               :class="profileTab==='addresses' ? 'bg-primary bg-opacity-10 text-primary fw-bold' : 'text-dark'"
+               @click.prevent="profileTab='addresses'">
+              <i class="bi bi-geo-alt"></i> Direcciones
+            </a>
+            <a href="#" class="d-flex align-items-center gap-2 px-3 py-3 text-decoration-none"
+               :class="profileTab==='prefs' ? 'bg-primary bg-opacity-10 text-primary fw-bold' : 'text-dark'"
+               @click.prevent="profileTab='prefs'">
+              <i class="bi bi-sliders"></i> Preferencias
+            </a>
+          </div>
+        </div>
+
+        <!-- Contenido principal -->
+        <div class="col-md-9">
+
+          <!-- ── TAB: MIS DATOS ── -->
+          <div v-if="profileTab==='data'" class="bg-white rounded shadow-sm p-4">
+            <h5 class="fw-bold mb-4"><i class="bi bi-person-gear me-2 text-primary"></i>Mis datos personales</h5>
+            <form @submit.prevent="saveProfileData" novalidate>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">Nombre completo <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" :class="{'is-invalid': profileErrors.name}"
+                         v-model="profileData.name" placeholder="Tu nombre completo">
+                  <div class="invalid-feedback">{{ profileErrors.name }}</div>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">Teléfono</label>
+                  <div class="input-group">
+                    <span class="input-group-text">+56</span>
+                    <input type="tel" class="form-control" v-model="profileData.phone"
+                           placeholder="9 1234 5678" maxlength="12">
+                  </div>
+                </div>
+                <div class="col-12">
+                  <label class="form-label fw-bold">Email</label>
+                  <input type="email" class="form-control bg-light" :value="auth.user?.email" disabled>
+                  <small class="text-muted">El email no puede modificarse. Contacta soporte si necesitas cambiarlo.</small>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">
+                    RUT <span class="text-danger">*</span>
+                    <span class="badge bg-success ms-1" v-if="auth.user?.rut">
+                      <i class="bi bi-shield-check me-1"></i>Verificado
+                    </span>
+                  </label>
+                  <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-person-vcard"></i></span>
+                    <input type="text" class="form-control"
+                           :class="{'is-invalid': profileErrors.rut, 'bg-light': auth.user?.rut}"
+                           v-model="profileData.rut"
+                           :disabled="!!auth.user?.rut"
+                           :placeholder="auth.user?.rut ? auth.user.rut : '12.345.678-9'"
+                           maxlength="12"
+                           @input="formatRutInput"
+                           @blur="formatRutInput">
+                    <div class="invalid-feedback">{{ profileErrors.rut }}</div>
+                  </div>
+                  <small class="text-danger fw-bold" v-if="!auth.user?.rut">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Campo obligatorio — una vez guardado no puede modificarse.
+                  </small>
+                  <small class="text-muted" v-if="auth.user?.rut">
+                    <i class="bi bi-lock me-1"></i>El RUT no puede modificarse por razones de seguridad.
+                  </small>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">Fecha de nacimiento <span class="text-muted fw-normal small">(opcional)</span></label>
+                  <input type="date" class="form-control" v-model="profileData.birthdate">
+                </div>
+              </div>
+              <div class="alert alert-danger mt-3" v-if="profileErrors._global">
+                <i class="bi bi-exclamation-triangle me-2"></i>{{ profileErrors._global }}
+              </div>
+              <div class="alert alert-success mt-3" v-if="profileSuccess">
+                <i class="bi bi-check-circle me-2"></i>{{ profileSuccess }}
+              </div>
+              <div class="mt-4 pt-3 border-top">
+                <button type="submit" class="btn btn-primary fw-bold px-4" :disabled="profileLoading">
+                  <span v-if="profileLoading" class="spinner-border spinner-border-sm me-2"></span>
+                  <i class="bi bi-cloud-check me-1" v-else></i>Guardar cambios
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- ── TAB: CONTRASEÑA ── -->
+          <div v-if="profileTab==='password'" class="bg-white rounded shadow-sm p-4">
+            <h5 class="fw-bold mb-4"><i class="bi bi-shield-lock me-2 text-primary"></i>Cambiar contraseña</h5>
+            <form @submit.prevent="savePassword" novalidate>
+              <div class="row g-3" style="max-width:480px">
+                <div class="col-12">
+                  <label class="form-label fw-bold">Contraseña actual <span class="text-danger">*</span></label>
+                  <div class="input-group">
+                    <input :type="showPwd.current ? 'text' : 'password'" class="form-control"
+                           :class="{'is-invalid': pwdErrors.current}" v-model="pwdForm.current">
+                    <button type="button" class="btn btn-outline-secondary" @click="showPwd.current=!showPwd.current">
+                      <i class="bi" :class="showPwd.current ? 'bi-eye-slash' : 'bi-eye'"></i>
+                    </button>
+                    <div class="invalid-feedback">{{ pwdErrors.current }}</div>
+                  </div>
+                </div>
+                <div class="col-12">
+                  <label class="form-label fw-bold">Nueva contraseña <span class="text-danger">*</span></label>
+                  <div class="input-group">
+                    <input :type="showPwd.new ? 'text' : 'password'" class="form-control"
+                           :class="{'is-invalid': pwdErrors.new}" v-model="pwdForm.new">
+                    <button type="button" class="btn btn-outline-secondary" @click="showPwd.new=!showPwd.new">
+                      <i class="bi" :class="showPwd.new ? 'bi-eye-slash' : 'bi-eye'"></i>
+                    </button>
+                    <div class="invalid-feedback">{{ pwdErrors.new }}</div>
+                  </div>
+                  <!-- Indicador de fuerza -->
+                  <div class="mt-2" v-if="pwdForm.new">
+                    <div class="progress" style="height:4px">
+                      <div class="progress-bar" :class="pwdStrength.color"
+                           :style="{width: pwdStrength.pct + '%'}"></div>
+                    </div>
+                    <small :class="pwdStrength.textColor">{{ pwdStrength.label }}</small>
+                  </div>
+                </div>
+                <div class="col-12">
+                  <label class="form-label fw-bold">Confirmar nueva contraseña <span class="text-danger">*</span></label>
+                  <div class="input-group">
+                    <input :type="showPwd.confirm ? 'text' : 'password'" class="form-control"
+                           :class="{'is-invalid': pwdErrors.confirm}" v-model="pwdForm.confirm">
+                    <button type="button" class="btn btn-outline-secondary" @click="showPwd.confirm=!showPwd.confirm">
+                      <i class="bi" :class="showPwd.confirm ? 'bi-eye-slash' : 'bi-eye'"></i>
+                    </button>
+                    <div class="invalid-feedback">{{ pwdErrors.confirm }}</div>
+                  </div>
+                </div>
+              </div>
+              <div class="alert alert-danger mt-3" v-if="pwdErrors._global">
+                <i class="bi bi-exclamation-triangle me-2"></i>{{ pwdErrors._global }}
+              </div>
+              <div class="alert alert-success mt-3" v-if="pwdSuccess">
+                <i class="bi bi-check-circle me-2"></i>{{ pwdSuccess }}
+              </div>
+              <div class="mt-4 pt-3 border-top">
+                <button type="submit" class="btn btn-primary fw-bold px-4" :disabled="profileLoading">
+                  <span v-if="profileLoading" class="spinner-border spinner-border-sm me-2"></span>
+                  <i class="bi bi-lock me-1" v-else></i>Cambiar contraseña
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- ── TAB: DIRECCIONES ── -->
+          <div v-if="profileTab==='addresses'">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="fw-bold mb-0"><i class="bi bi-geo-alt me-2 text-primary"></i>Mis direcciones</h5>
+              <button class="btn btn-primary btn-sm" @click="openAddressForm(null)">
+                <i class="bi bi-plus-lg me-1"></i>Nueva dirección
+              </button>
+            </div>
+
+            <!-- Lista de direcciones -->
+            <div v-if="addressesLoading" class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+            <div v-else>
+              <div v-for="addr in addresses" :key="addr.id"
+                   class="bg-white rounded shadow-sm p-3 mb-3 d-flex align-items-start gap-3">
+                <div class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center flex-shrink-0"
+                     style="width:44px;height:44px">
+                  <i class="bi bi-house text-primary"></i>
+                </div>
+                <div class="flex-grow-1">
+                  <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="fw-bold">{{ addr.label }}</span>
+                    <span class="badge bg-success" v-if="addr.is_default">Principal</span>
+                  </div>
+                  <div class="text-muted small">{{ addr.full_name }}</div>
+                  <div class="text-muted small">{{ addr.address }}, {{ addr.city }}, {{ addr.region }}</div>
+                  <div class="text-muted small" v-if="addr.zip_code">CP: {{ addr.zip_code }}</div>
+                </div>
+                <div class="d-flex flex-column gap-1">
+                  <button class="btn btn-sm btn-outline-primary" @click="openAddressForm(addr)">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <button class="btn btn-sm btn-outline-success" v-if="!addr.is_default"
+                          @click="setDefaultAddress(addr.id)" title="Establecer como principal">
+                    <i class="bi bi-star"></i>
+                  </button>
+                  <button class="btn btn-sm btn-outline-danger" @click="deleteAddress(addr.id)">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="addresses.length === 0" class="text-center py-5 bg-white rounded shadow-sm">
+                <i class="bi bi-geo-alt" style="font-size:3rem;color:#ccc"></i>
+                <p class="mt-3 fw-bold">Sin direcciones guardadas</p>
+                <button class="btn btn-primary" @click="openAddressForm(null)">
+                  <i class="bi bi-plus-lg me-1"></i>Agregar dirección
+                </button>
+              </div>
+            </div>
+
+            <!-- Formulario dirección (modal inline) -->
+            <div v-if="addressForm.show"
+                 style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;display:flex;align-items:center;justify-content:center;padding:1rem"
+                 @click.self="addressForm.show=false">
+              <div class="bg-white rounded p-4 shadow w-100" style="max-width:540px;max-height:90vh;overflow-y:auto">
+                <h5 class="fw-bold mb-4">
+                  <i class="bi bi-geo-alt me-2 text-primary"></i>
+                  {{ addressForm.id ? 'Editar dirección' : 'Nueva dirección' }}
+                </h5>
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <label class="form-label fw-bold">Etiqueta</label>
+                    <select class="form-select" v-model="addressForm.label">
+                      <option>Casa</option><option>Trabajo</option><option>Otro</option>
+                    </select>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label fw-bold">Nombre receptor <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" :class="{'is-invalid': addressErrors.full_name}"
+                           v-model="addressForm.full_name" placeholder="Nombre completo">
+                    <div class="invalid-feedback">{{ addressErrors.full_name }}</div>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label fw-bold">Dirección <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" :class="{'is-invalid': addressErrors.address}"
+                           v-model="addressForm.address" placeholder="Calle, número, depto/oficina">
+                    <div class="invalid-feedback">{{ addressErrors.address }}</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label fw-bold">Ciudad <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" :class="{'is-invalid': addressErrors.city}"
+                           v-model="addressForm.city" placeholder="Santiago">
+                    <div class="invalid-feedback">{{ addressErrors.city }}</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label fw-bold">Región <span class="text-danger">*</span></label>
+                    <select class="form-select" :class="{'is-invalid': addressErrors.region}"
+                            v-model="addressForm.region">
+                      <option value="">— Selecciona —</option>
+                      <option>Región Metropolitana</option>
+                      <option>Región de Valparaíso</option>
+                      <option>Región del Biobío</option>
+                      <option>Región de La Araucanía</option>
+                      <option>Región de Los Lagos</option>
+                      <option>Región de Coquimbo</option>
+                      <option>Región de Antofagasta</option>
+                      <option>Región de Atacama</option>
+                      <option>Región de Tarapacá</option>
+                      <option>Región de Arica y Parinacota</option>
+                      <option>Región de O'Higgins</option>
+                      <option>Región del Maule</option>
+                      <option>Región de Ñuble</option>
+                      <option>Región de Los Ríos</option>
+                      <option>Región de Aysén</option>
+                      <option>Región de Magallanes</option>
+                    </select>
+                    <div class="invalid-feedback">{{ addressErrors.region }}</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label fw-bold">Código postal <span class="text-muted fw-normal small">(opcional)</span></label>
+                    <input type="text" class="form-control" v-model="addressForm.zip_code" placeholder="1234567">
+                  </div>
+                  <div class="col-md-6 d-flex align-items-end">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="defaultAddr" v-model="addressForm.is_default">
+                      <label class="form-check-label fw-bold" for="defaultAddr">
+                        <i class="bi bi-star me-1 text-warning"></i>Dirección principal
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <div class="alert alert-danger mt-3" v-if="addressErrors._global">{{ addressErrors._global }}</div>
+                <div class="d-flex gap-2 mt-4 pt-3 border-top">
+                  <button class="btn btn-primary fw-bold" @click="saveAddress" :disabled="profileLoading">
+                    <span v-if="profileLoading" class="spinner-border spinner-border-sm me-2"></span>
+                    {{ addressForm.id ? 'Guardar cambios' : 'Agregar dirección' }}
+                  </button>
+                  <button class="btn btn-outline-secondary" @click="addressForm.show=false">Cancelar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── TAB: PREFERENCIAS ── -->
+          <div v-if="profileTab==='prefs'" class="bg-white rounded shadow-sm p-4">
+            <h5 class="fw-bold mb-4"><i class="bi bi-sliders me-2 text-primary"></i>Preferencias</h5>
+            <div class="row g-4">
+              <div class="col-12">
+                <h6 class="fw-bold text-muted text-uppercase" style="font-size:.75rem;letter-spacing:.8px">Notificaciones</h6>
+                <div class="d-flex flex-column gap-3 mt-2">
+                  <div v-for="pref in notifPrefs" :key="pref.key"
+                       class="d-flex align-items-center justify-content-between p-3 rounded border">
+                    <div>
+                      <div class="fw-bold small">{{ pref.label }}</div>
+                      <div class="text-muted" style="font-size:.78rem">{{ pref.desc }}</div>
+                    </div>
+                    <div class="form-check form-switch mb-0">
+                      <input class="form-check-input" type="checkbox" v-model="pref.value"
+                             style="width:2.5rem;height:1.25rem">
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="col-12">
+                <h6 class="fw-bold text-muted text-uppercase" style="font-size:.75rem;letter-spacing:.8px">Privacidad</h6>
+                <div class="d-flex flex-column gap-3 mt-2">
+                  <div v-for="pref in privacyPrefs" :key="pref.key"
+                       class="d-flex align-items-center justify-content-between p-3 rounded border">
+                    <div>
+                      <div class="fw-bold small">{{ pref.label }}</div>
+                      <div class="text-muted" style="font-size:.78rem">{{ pref.desc }}</div>
+                    </div>
+                    <div class="form-check form-switch mb-0">
+                      <input class="form-check-input" type="checkbox" v-model="pref.value"
+                             style="width:2.5rem;height:1.25rem">
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="col-12 pt-2 border-top">
+                <button class="btn btn-primary fw-bold px-4" @click="savePrefs">
+                  <i class="bi bi-cloud-check me-1"></i>Guardar preferencias
+                </button>
+              </div>
+              <!-- Zona de peligro -->
+              <div class="col-12">
+                <h6 class="fw-bold text-danger text-uppercase" style="font-size:.75rem;letter-spacing:.8px">
+                  <i class="bi bi-exclamation-triangle me-1"></i>Zona de peligro
+                </h6>
+                <div class="border border-danger rounded p-3 mt-2">
+                  <p class="small text-muted mb-3">Eliminar tu cuenta borra permanentemente todos tus datos, productos y órdenes. Esta acción no puede deshacerse.</p>
+                  <button class="btn btn-outline-danger btn-sm fw-bold" @click="confirmDeleteAccount=true">
+                    <i class="bi bi-trash me-1"></i>Eliminar mi cuenta
+                  </button>
+                </div>
+              </div>
+            </div>
+            <!-- Confirm delete account -->
+            <div v-if="confirmDeleteAccount"
+                 style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9001;display:flex;align-items:center;justify-content:center;padding:1rem">
+              <div class="bg-white rounded p-4 shadow" style="max-width:380px">
+                <h5 class="fw-bold text-danger mb-3"><i class="bi bi-trash me-2"></i>¿Eliminar cuenta?</h5>
+                <p class="text-muted small mb-3">Esta acción es irreversible. Escribe <strong>ELIMINAR</strong> para confirmar.</p>
+                <input type="text" class="form-control mb-3" v-model="deleteAccountConfirmText" placeholder="ELIMINAR">
+                <div class="d-flex gap-2">
+                  <button class="btn btn-outline-secondary" @click="confirmDeleteAccount=false;deleteAccountConfirmText=''">Cancelar</button>
+                  <button class="btn btn-danger fw-bold" :disabled="deleteAccountConfirmText !== 'ELIMINAR'" @click="doDeleteAccount">
+                    Sí, eliminar mi cuenta
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </template>
+
+
   </div>
 
   <!-- ─── PRODUCT DETAIL (full-width) ─── -->
@@ -1023,9 +1425,12 @@
           <div v-if="selectedProduct.compare_price" class="discount-badge d-inline-block mb-2">
             {{ Math.round((1 - selectedProduct.price/selectedProduct.compare_price)*100) }}% OFF
           </div>
-          <hr>
-          <div v-if="selectedProduct.short_desc" class="short-desc mb-3"><i class="bi bi-truck me-1"></i>{{ selectedProduct.short_desc }}</div>
-          <hr>
+          <!-- Descripción breve -->
+          <div v-if="selectedProduct.short_desc || selectedProduct.meta_desc"
+               class="mb-3 pb-3 border-bottom text-muted"
+               style="font-size:.93rem;line-height:1.5">
+            {{ selectedProduct.short_desc || selectedProduct.meta_desc }}
+          </div>
           <div v-if="selectedProduct.free_shipping" class="free-ship mb-3"><i class="bi bi-truck me-1"></i>Envío gratis</div>
           <div class="mb-3">
             <span class="fw-bold">Stock: </span>
@@ -1129,7 +1534,7 @@
           <div class="d-flex justify-content-between fw-bold fs-5 mb-3">
             <span>Total</span><span>{{ formatCLP(cart.total) }}</span>
           </div>
-          <button class="btn-add-cart" @click="auth.user ? navigate('checkout') : navigate('login')">
+          <button class="btn-add-cart" @click="auth.user ? (checkRut() && navigate('checkout')) : navigate('login')">
             Continuar compra
           </button>
         </div>
@@ -1506,6 +1911,7 @@ const app = createApp({
     }
 
     async function submitProductForm() {
+      if (!checkRut()) return;
       formErrors.value = {};
       const errs = validateProductForm();
       if (Object.keys(errs).length) { formErrors.value = errs; return; }
@@ -1555,6 +1961,223 @@ const app = createApp({
         await loadMyProducts();
         sellerTab.value = 'list';
       } catch (e) { toast('Error al eliminar.', 'error'); }
+    }
+
+    // ── Perfil de Usuario ──────────────────────────────────────────────────
+    const profileTab    = ref('data');
+    const profileLoading = ref(false);
+    const profileSuccess = ref('');
+    const profileErrors  = ref({});
+    const pwdErrors      = ref({});
+    const pwdSuccess     = ref('');
+    const addressesLoading = ref(false);
+    const addresses      = ref([]);
+    const addressErrors  = ref({});
+    const confirmDeleteAccount = ref(false);
+    const deleteAccountConfirmText = ref('');
+
+    const profileData = ref({
+      name: '', phone: '', rut: '', birthdate: ''
+    });
+
+    const pwdForm = ref({ current: '', new: '', confirm: '' });
+    const showPwd = ref({ current: false, new: false, confirm: false });
+
+    const addressForm = ref({
+      show: false, id: null, label: 'Casa', full_name: '',
+      address: '', city: '', region: '', zip_code: '', is_default: false
+    });
+
+    const notifPrefs = ref([
+      { key: 'email_orders',   label: 'Órdenes y compras',   desc: 'Confirmaciones, estados y actualizaciones de tus pedidos', value: true },
+      { key: 'email_messages', label: 'Mensajes',             desc: 'Cuando recibes un mensaje de un comprador o vendedor', value: true },
+      { key: 'email_offers',   label: 'Ofertas y descuentos', desc: 'Promociones y productos en oferta según tus intereses', value: false },
+      { key: 'email_news',     label: 'Novedades',            desc: 'Nuevas funcionalidades y actualizaciones de MercadoSordo', value: false },
+    ]);
+
+    const privacyPrefs = ref([
+      { key: 'show_phone',   label: 'Mostrar teléfono a compradores', desc: 'Los compradores pueden ver tu número de contacto', value: false },
+      { key: 'public_sales', label: 'Perfil de ventas público',       desc: 'Cualquiera puede ver tus estadísticas de ventas', value: true },
+    ]);
+
+    const pwdStrength = computed(() => {
+      const p = pwdForm.value.new;
+      if (!p) return { pct: 0, label: '', color: '', textColor: '' };
+      let score = 0;
+      if (p.length >= 8)  score++;
+      if (p.length >= 12) score++;
+      if (/[A-Z]/.test(p)) score++;
+      if (/[0-9]/.test(p)) score++;
+      if (/[^A-Za-z0-9]/.test(p)) score++;
+      const map = [
+        { pct: 20,  label: 'Muy débil',  color: 'bg-danger',  textColor: 'text-danger' },
+        { pct: 40,  label: 'Débil',      color: 'bg-warning', textColor: 'text-warning' },
+        { pct: 60,  label: 'Regular',    color: 'bg-info',    textColor: 'text-info' },
+        { pct: 80,  label: 'Fuerte',     color: 'bg-primary', textColor: 'text-primary' },
+        { pct: 100, label: 'Muy fuerte', color: 'bg-success', textColor: 'text-success' },
+      ];
+      return map[Math.min(score, 4)];
+    });
+
+    // ── Utilidades RUT ─────────────────────────────────────
+    function isValidRut(rut) {
+      const clean = rut.replace(/[^0-9kK]/g, '');
+      if (clean.length < 8 || clean.length > 9) return false;
+      const body = clean.slice(0, -1);
+      const dv   = clean.slice(-1).toLowerCase();
+      let sum = 0, factor = 2;
+      for (let i = body.length - 1; i >= 0; i--) {
+        sum += parseInt(body[i]) * factor;
+        factor = factor === 7 ? 2 : factor + 1;
+      }
+      const rem = 11 - (sum % 11);
+      const expected = rem === 11 ? '0' : rem === 10 ? 'k' : String(rem);
+      return dv === expected;
+    }
+
+    function formatRutInput(e) {
+      if (auth.value.user?.rut) return; // bloqueado
+      let val = e.target.value.replace(/[^0-9kK]/gi, '').toUpperCase();
+      if (val.length > 1) {
+        const dv   = val.slice(-1);
+        const body = val.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        val = body + '-' + dv;
+      }
+      profileData.value.rut = val;
+    }
+
+    // ── Guard RUT — redirige a perfil si falta ─────────────
+    function checkRut(action = null) {
+      if (!auth.value.user?.rut) {
+        profileTab.value = 'data';
+        navigate('profile');
+        setTimeout(() => {
+          toast('⚠️ Debes ingresar tu RUT antes de continuar.', 'error');
+          // Foco automático al campo RUT
+          const rutInput = document.querySelector('input[placeholder="12.345.678-9"]');
+          if (rutInput) { rutInput.focus(); rutInput.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        }, 300);
+        return false;
+      }
+      return true;
+    }
+
+    function initProfileData() {
+      if (auth.value.user) {
+        profileData.value.name  = auth.value.user.name  || '';
+        profileData.value.phone = auth.value.user.phone || '';
+        profileData.value.rut   = auth.value.user.rut   || '';
+      }
+    }
+
+    async function saveProfileData() {
+      profileErrors.value = {}; profileSuccess.value = '';
+      if (!profileData.value.name?.trim()) {
+        profileErrors.value.name = 'El nombre es requerido.'; return;
+      }
+      // RUT obligatorio si aún no está guardado
+      if (!auth.value.user?.rut) {
+        if (!profileData.value.rut?.trim()) {
+          profileErrors.value.rut = 'El RUT es obligatorio.'; return;
+        }
+        if (!isValidRut(profileData.value.rut)) {
+          profileErrors.value.rut = 'RUT inválido. Verifica el dígito verificador.'; return;
+        }
+      }
+      profileLoading.value = true;
+      try {
+        await api('PATCH', '/profile', profileData.value);
+        auth.value.user = { ...auth.value.user, ...profileData.value };
+        profileSuccess.value = 'Datos actualizados correctamente.';
+        setTimeout(() => profileSuccess.value = '', 4000);
+      } catch (e) {
+        profileErrors.value._global = e.error || 'Error al guardar los datos.';
+      } finally { profileLoading.value = false; }
+    }
+
+    async function savePassword() {
+      pwdErrors.value = {}; pwdSuccess.value = '';
+      if (!pwdForm.value.current) { pwdErrors.value.current = 'Ingresa tu contraseña actual.'; return; }
+      if (!pwdForm.value.new || pwdForm.value.new.length < 8) { pwdErrors.value.new = 'Mínimo 8 caracteres.'; return; }
+      if (pwdForm.value.new !== pwdForm.value.confirm) { pwdErrors.value.confirm = 'Las contraseñas no coinciden.'; return; }
+      profileLoading.value = true;
+      try {
+        await api('POST', '/profile/password', { current: pwdForm.value.current, password: pwdForm.value.new });
+        pwdSuccess.value = 'Contraseña actualizada correctamente.';
+        pwdForm.value = { current: '', new: '', confirm: '' };
+        setTimeout(() => pwdSuccess.value = '', 4000);
+      } catch (e) {
+        pwdErrors.value._global = e.error || 'Error al cambiar la contraseña.';
+      } finally { profileLoading.value = false; }
+    }
+
+    async function loadAddresses() {
+      addressesLoading.value = true;
+      try { addresses.value = await api('GET', '/profile/addresses'); } catch {}
+      finally { addressesLoading.value = false; }
+    }
+
+    function openAddressForm(addr) {
+      addressErrors.value = {};
+      if (addr) {
+        addressForm.value = { show: true, id: addr.id, label: addr.label || 'Casa',
+          full_name: addr.full_name, address: addr.address, city: addr.city,
+          region: addr.region, zip_code: addr.zip_code || '', is_default: !!addr.is_default };
+      } else {
+        addressForm.value = { show: true, id: null, label: 'Casa', full_name: '',
+          address: '', city: '', region: '', zip_code: '', is_default: false };
+      }
+    }
+
+    async function saveAddress() {
+      addressErrors.value = {};
+      const f = addressForm.value;
+      if (!f.full_name?.trim()) { addressErrors.value.full_name = 'El nombre es requerido.'; return; }
+      if (!f.address?.trim())   { addressErrors.value.address   = 'La dirección es requerida.'; return; }
+      if (!f.city?.trim())      { addressErrors.value.city      = 'La ciudad es requerida.'; return; }
+      if (!f.region)            { addressErrors.value.region    = 'Selecciona una región.'; return; }
+      profileLoading.value = true;
+      try {
+        if (f.id) {
+          await api('PUT', `/profile/addresses/${f.id}`, f);
+        } else {
+          await api('POST', '/profile/addresses', f);
+        }
+        addressForm.value.show = false;
+        await loadAddresses();
+        toast(f.id ? 'Dirección actualizada.' : 'Dirección agregada.');
+      } catch (e) {
+        addressErrors.value._global = e.error || 'Error al guardar la dirección.';
+      } finally { profileLoading.value = false; }
+    }
+
+    async function setDefaultAddress(id) {
+      try {
+        await api('PATCH', `/profile/addresses/${id}/default`);
+        await loadAddresses();
+        toast('Dirección principal actualizada.');
+      } catch { toast('Error al actualizar.', 'error'); }
+    }
+
+    async function deleteAddress(id) {
+      try {
+        await api('DELETE', `/profile/addresses/${id}`);
+        await loadAddresses();
+        toast('Dirección eliminada.');
+      } catch { toast('Error al eliminar.', 'error'); }
+    }
+
+    function savePrefs() {
+      toast('Preferencias guardadas.');
+    }
+
+    async function doDeleteAccount() {
+      if (deleteAccountConfirmText.value !== 'ELIMINAR') return;
+      try {
+        await api('DELETE', '/profile');
+        await logout();
+        toast('Cuenta eliminada. ¡Hasta pronto!');
+      } catch { toast('Error al eliminar la cuenta.', 'error'); }
     }
 
     const adminDash = ref({});
@@ -1610,6 +2233,7 @@ const app = createApp({
       if (view === 'cart') loadCart();
       if (view === 'orders') loadOrders();
       if (view === 'my-products') { sellerTab.value = 'list'; loadMyProducts(); }
+      if (view === 'profile') { profileTab.value = 'data'; initProfileData(); loadAddresses(); }
       if (view === 'admin') { adminView.value = 'dashboard'; loadDashboard(); }
     }
 
@@ -1725,6 +2349,7 @@ const app = createApp({
     }
 
     async function addToCart(product, qty = 1) {
+      if (!checkRut()) return;
       try {
         await api('POST', '/cart/items', { product_id: product.id, quantity: qty });
         await loadCart();
@@ -1795,6 +2420,14 @@ const app = createApp({
       loadProducts, viewProduct, filterByCategory, doSearch, applyFilters, resetFilters, changePage,
       addToCart, updateCartItem, removeCartItem, toggleWishlist,
       loadOrders, loadDashboard, loadAdminUsers, loadAdminProducts, loadAdminOrders,
+      profileTab, profileLoading, profileSuccess, profileErrors, profileData,
+      pwdForm, pwdErrors, pwdSuccess, pwdStrength, showPwd,
+      addresses, addressesLoading, addressForm, addressErrors,
+      notifPrefs, privacyPrefs,
+      confirmDeleteAccount, deleteAccountConfirmText,
+      saveProfileData, savePassword, loadAddresses, formatRutInput, isValidRut, checkRut,
+      openAddressForm, saveAddress, setDefaultAddress, deleteAddress,
+      savePrefs, doDeleteAccount, initProfileData,
       sellerTab, myProducts, myProductsLoading, myProductSearch, myProductStatusFilter,
       productForm, productFormLoading, formErrors, filteredMyProducts, deleteConfirm,
       openProductForm, loadMyProducts, submitProductForm, toggleProductStatus,
