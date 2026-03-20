@@ -546,7 +546,7 @@ class ProfileController
     public function show(Request $req): void
     {
         $user = DB::getInstance()->fetch(
-            "SELECT id, uuid, name, email, role, status, phone, rut, rut_verified, avatar, created_at FROM users WHERE id=?",
+            "SELECT id, uuid, name, email, role, status, phone, rut, rut_verified, birthdate, avatar, created_at FROM users WHERE id=?",
             [Auth::id()]
         );
         Response::json($user);
@@ -559,8 +559,12 @@ class ProfileController
         $user   = $db->fetch("SELECT rut FROM users WHERE id=?", [Auth::id()]);
         $update = [];
 
-        if (!empty($data['name']))  $update['name']  = trim($data['name']);
-        if (isset($data['phone']))  $update['phone'] = trim($data['phone']) ?: null;
+        if (!empty($data['name']))      $update['name']      = trim($data['name']);
+        if (isset($data['phone']))      $update['phone']     = trim($data['phone']) ?: null;
+        if (isset($data['birthdate'])) {
+            $bd = trim($data['birthdate']);
+            $update['birthdate'] = ($bd && preg_match('/^\d{4}-\d{2}-\d{2}$/', $bd)) ? $bd : null;
+        }
 
         // RUT: obligatorio al registrarse, inmutable una vez guardado
         if (!empty($data['rut'])) {
@@ -598,6 +602,70 @@ class ProfileController
         $current = $req->bearerToken();
         $db->query("DELETE FROM user_tokens WHERE user_id=? AND token != ?", [Auth::id(), $current]);
         Response::json(['message' => 'Contraseña actualizada.']);
+    }
+
+    public function uploadAvatar(Request $req): void
+    {
+        if (empty($_FILES['avatar'])) {
+            Response::json(['error' => 'No se recibió ninguna imagen.'], 400);
+        }
+
+        $file     = $_FILES['avatar'];
+        $allowed  = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+        $mimeType = mime_content_type($file['tmp_name']);
+
+        if (!isset($allowed[$mimeType])) {
+            Response::json(['error' => 'Formato no permitido. Solo JPG, PNG o WebP.'], 422);
+        }
+        if ($file['size'] > 2 * 1024 * 1024) {
+            Response::json(['error' => 'La imagen no puede superar 2MB.'], 422);
+        }
+
+        // Crear carpeta si no existe
+        $uploadDir = defined('BASE_PATH')
+            ? BASE_PATH . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'avatars'
+            : __DIR__ . '/../public/uploads/avatars';
+
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
+
+        // Nombre único — eliminar avatar anterior
+        $db       = DB::getInstance();
+        $current  = $db->fetch("SELECT avatar FROM users WHERE id=?", [Auth::id()]);
+        if (!empty($current['avatar'])) {
+            $oldFile = defined('BASE_PATH')
+                ? BASE_PATH . '/public' . $current['avatar']
+                : __DIR__ . '/../public' . $current['avatar'];
+            if (file_exists($oldFile)) @unlink($oldFile);
+        }
+
+        $ext      = $allowed[$mimeType];
+        $filename = 'avatar_' . Auth::id() . '_' . time() . '.' . $ext;
+        $dest     = $uploadDir . DIRECTORY_SEPARATOR . $filename;
+
+        if (!move_uploaded_file($file['tmp_name'], $dest)) {
+            Response::json(['error' => 'Error al guardar la imagen.'], 500);
+        }
+
+        $avatarUrl = '/uploads/avatars/' . $filename;
+        $db->update('users', ['avatar' => $avatarUrl], 'id=?', [Auth::id()]);
+
+        Response::json(['avatar_url' => $avatarUrl, 'message' => 'Avatar actualizado.']);
+    }
+
+    public function deleteAvatar(Request $req): void
+    {
+        $db   = DB::getInstance();
+        $user = $db->fetch("SELECT avatar FROM users WHERE id=?", [Auth::id()]);
+        if (!empty($user['avatar'])) {
+            $file = defined('BASE_PATH')
+                ? BASE_PATH . '/public' . $user['avatar']
+                : __DIR__ . '/../public' . $user['avatar'];
+            if (file_exists($file)) @unlink($file);
+        }
+        $db->update('users', ['avatar' => null], 'id=?', [Auth::id()]);
+        Response::json(['message' => 'Avatar eliminado.']);
     }
 
     public function getAddresses(Request $req): void

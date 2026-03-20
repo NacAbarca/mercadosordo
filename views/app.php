@@ -1000,17 +1000,59 @@
         <!-- Sidebar perfil -->
         <div class="col-md-3">
           <div class="bg-white rounded shadow-sm p-4 text-center mb-3">
-            <div class="rounded-circle bg-primary d-inline-flex align-items-center justify-content-center mb-3"
-                 style="width:80px;height:80px;font-size:2rem;color:white">
-              {{ auth.user?.name?.charAt(0).toUpperCase() }}
+            <!-- Avatar con upload -->
+            <div class="position-relative d-inline-block mb-3">
+              <div class="rounded-circle overflow-hidden border border-3 border-primary"
+                   style="width:90px;height:90px;cursor:pointer"
+                   @click="triggerAvatarUpload"
+                   title="Cambiar foto">
+                <img v-if="auth.user?.avatar || avatarPreview"
+                     :src="avatarPreview || auth.user.avatar"
+                     class="w-100 h-100"
+                     style="object-fit:cover">
+                <div v-else
+                     class="w-100 h-100 bg-primary d-flex align-items-center justify-content-center"
+                     style="font-size:2rem;color:white;font-weight:700">
+                  {{ auth.user?.name?.charAt(0).toUpperCase() }}
+                </div>
+              </div>
+              <!-- Botón cámara -->
+              <button class="btn btn-primary btn-sm rounded-circle position-absolute"
+                      style="width:28px;height:28px;bottom:0;right:0;padding:0;font-size:.75rem"
+                      @click="triggerAvatarUpload" title="Cambiar foto">
+                <i class="bi bi-camera-fill"></i>
+              </button>
+              <!-- Input file oculto -->
+              <input type="file" id="avatarInput" accept="image/jpeg,image/png,image/webp"
+                     style="display:none" @change="onAvatarSelected">
             </div>
+
+            <!-- Preview + acciones -->
+            <div v-if="avatarPreview" class="mb-3">
+              <div class="d-flex gap-2 justify-content-center">
+                <button class="btn btn-success btn-sm fw-bold" @click="uploadAvatar" :disabled="avatarUploading">
+                  <span v-if="avatarUploading" class="spinner-border spinner-border-sm me-1"></span>
+                  <i class="bi bi-cloud-upload me-1" v-else></i>Guardar
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" @click="cancelAvatar">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+              </div>
+              <small class="text-muted d-block mt-1">{{ avatarFileName }}</small>
+            </div>
+
             <h5 class="fw-bold mb-0">{{ auth.user?.name }}</h5>
             <p class="text-muted small mb-1">{{ auth.user?.email }}</p>
-            <span class="badge" :class="{'bg-danger':auth.user?.role==='admin','bg-info':auth.user?.role==='seller','bg-secondary':auth.user?.role==='buyer'}">
+            <span class="badge" :class="{'bg-danger':auth.user?.role==='admin','bg-info text-dark':auth.user?.role==='seller','bg-secondary':auth.user?.role==='buyer'}">
               {{ auth.user?.role }}
             </span>
             <div class="mt-3 pt-3 border-top text-start">
-              <div class="small text-muted mb-1"><i class="bi bi-calendar me-1"></i>Miembro desde {{ formatDate(auth.user?.created_at) }}</div>
+              <div class="small text-muted mb-1">
+                <i class="bi bi-calendar me-1"></i>Miembro desde {{ formatDate(auth.user?.created_at) }}
+              </div>
+              <div class="small text-muted" v-if="auth.user?.rut">
+                <i class="bi bi-shield-check text-success me-1"></i>RUT verificado
+              </div>
             </div>
           </div>
           <!-- Nav lateral -->
@@ -1046,24 +1088,13 @@
             <h5 class="fw-bold mb-4"><i class="bi bi-person-gear me-2 text-primary"></i>Mis datos personales</h5>
             <form @submit.prevent="saveProfileData" novalidate>
               <div class="row g-3">
+
+                <!-- Fila 1: Nombre + RUT -->
                 <div class="col-md-6">
                   <label class="form-label fw-bold">Nombre completo <span class="text-danger">*</span></label>
                   <input type="text" class="form-control" :class="{'is-invalid': profileErrors.name}"
                          v-model="profileData.name" placeholder="Tu nombre completo">
                   <div class="invalid-feedback">{{ profileErrors.name }}</div>
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label fw-bold">Teléfono</label>
-                  <div class="input-group">
-                    <span class="input-group-text">+56</span>
-                    <input type="tel" class="form-control" v-model="profileData.phone"
-                           placeholder="9 1234 5678" maxlength="12">
-                  </div>
-                </div>
-                <div class="col-12">
-                  <label class="form-label fw-bold">Email</label>
-                  <input type="email" class="form-control bg-light" :value="auth.user?.email" disabled>
-                  <small class="text-muted">El email no puede modificarse. Contacta soporte si necesitas cambiarlo.</small>
                 </div>
                 <div class="col-md-6">
                   <label class="form-label fw-bold">
@@ -1086,16 +1117,34 @@
                   </div>
                   <small class="text-danger fw-bold" v-if="!auth.user?.rut">
                     <i class="bi bi-exclamation-triangle me-1"></i>
-                    Campo obligatorio — una vez guardado no puede modificarse.
+                    Obligatorio — no puede modificarse una vez guardado.
                   </small>
                   <small class="text-muted" v-if="auth.user?.rut">
-                    <i class="bi bi-lock me-1"></i>El RUT no puede modificarse por razones de seguridad.
+                    <i class="bi bi-lock me-1"></i>No puede modificarse por razones de seguridad.
                   </small>
                 </div>
+
+                <!-- Fila 2: Email + Teléfono -->
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">Email</label>
+                  <input type="email" class="form-control bg-light" :value="auth.user?.email" disabled>
+                  <small class="text-muted">No puede modificarse. Contacta soporte si lo necesitas.</small>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">Teléfono</label>
+                  <div class="input-group">
+                    <span class="input-group-text">+56</span>
+                    <input type="tel" class="form-control" v-model="profileData.phone"
+                           placeholder="9 1234 5678" maxlength="12">
+                  </div>
+                </div>
+
+                <!-- Fila 3: Fecha de nacimiento -->
                 <div class="col-md-6">
                   <label class="form-label fw-bold">Fecha de nacimiento <span class="text-muted fw-normal small">(opcional)</span></label>
                   <input type="date" class="form-control" v-model="profileData.birthdate">
                 </div>
+
               </div>
               <div class="alert alert-danger mt-3" v-if="profileErrors._global">
                 <i class="bi bi-exclamation-triangle me-2"></i>{{ profileErrors._global }}
@@ -1965,6 +2014,66 @@ const app = createApp({
 
     // ── Perfil de Usuario ──────────────────────────────────────────────────
     const profileTab    = ref('data');
+    const avatarPreview   = ref(null);
+    const avatarFile      = ref(null);
+    const avatarFileName  = ref('');
+    const avatarUploading = ref(false);
+
+    function triggerAvatarUpload() {
+      document.getElementById('avatarInput').click();
+    }
+
+    function onAvatarSelected(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      // Validar tipo
+      if (!['image/jpeg','image/png','image/webp'].includes(file.type)) {
+        toast('Solo se permiten imágenes JPG, PNG o WebP.', 'error'); return;
+      }
+      // Validar tamaño (max 2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        toast('La imagen no puede superar 2MB.', 'error'); return;
+      }
+      avatarFile.value    = file;
+      avatarFileName.value = file.name;
+      const reader = new FileReader();
+      reader.onload = (ev) => { avatarPreview.value = ev.target.result; };
+      reader.readAsDataURL(file);
+    }
+
+    async function uploadAvatar() {
+      if (!avatarFile.value) return;
+      avatarUploading.value = true;
+      try {
+        const formData = new FormData();
+        formData.append('avatar', avatarFile.value);
+        const token = localStorage.getItem('ms_token');
+        const res = await fetch('/api/profile/avatar', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+        const data = await res.json();
+        if (!res.ok) throw data;
+        auth.value.user.avatar = data.avatar_url;
+        avatarPreview.value  = null;
+        avatarFile.value     = null;
+        avatarFileName.value = '';
+        document.getElementById('avatarInput').value = '';
+        toast('Foto de perfil actualizada ✓');
+      } catch (e) {
+        toast(e.error || 'Error al subir la imagen.', 'error');
+      } finally {
+        avatarUploading.value = false;
+      }
+    }
+
+    function cancelAvatar() {
+      avatarPreview.value  = null;
+      avatarFile.value     = null;
+      avatarFileName.value = '';
+      document.getElementById('avatarInput').value = '';
+    }
     const profileLoading = ref(false);
     const profileSuccess = ref('');
     const profileErrors  = ref({});
@@ -2064,9 +2173,10 @@ const app = createApp({
 
     function initProfileData() {
       if (auth.value.user) {
-        profileData.value.name  = auth.value.user.name  || '';
-        profileData.value.phone = auth.value.user.phone || '';
-        profileData.value.rut   = auth.value.user.rut   || '';
+        profileData.value.name      = auth.value.user.name      || '';
+        profileData.value.phone     = auth.value.user.phone     || '';
+        profileData.value.rut       = auth.value.user.rut       || '';
+        profileData.value.birthdate = auth.value.user.birthdate || '';
       }
     }
 
@@ -2086,8 +2196,13 @@ const app = createApp({
       }
       profileLoading.value = true;
       try {
-        await api('PATCH', '/profile', profileData.value);
-        auth.value.user = { ...auth.value.user, ...profileData.value };
+        // No enviar rut si ya está registrado (evita 403)
+        const payload = { ...profileData.value };
+        if (auth.value.user?.rut) delete payload.rut;
+        await api('PATCH', '/profile', payload);
+        const updated = { ...profileData.value };
+        if (auth.value.user?.rut) delete updated.rut;
+        auth.value.user = { ...auth.value.user, ...updated };
         profileSuccess.value = 'Datos actualizados correctamente.';
         setTimeout(() => profileSuccess.value = '', 4000);
       } catch (e) {
@@ -2426,6 +2541,8 @@ const app = createApp({
       notifPrefs, privacyPrefs,
       confirmDeleteAccount, deleteAccountConfirmText,
       saveProfileData, savePassword, loadAddresses, formatRutInput, isValidRut, checkRut,
+      avatarPreview, avatarFileName, avatarUploading,
+      triggerAvatarUpload, onAvatarSelected, uploadAvatar, cancelAvatar,
       openAddressForm, saveAddress, setDefaultAddress, deleteAddress,
       savePrefs, doDeleteAccount, initProfileData,
       sellerTab, myProducts, myProductsLoading, myProductSearch, myProductStatusFilter,

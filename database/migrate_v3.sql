@@ -21,3 +21,7 @@ FROM INFORMATION_SCHEMA.COLUMNS
 WHERE TABLE_SCHEMA = DATABASE()
   AND TABLE_NAME = 'users'
 ORDER BY ORDINAL_POSITION;
+
+-- Agregar fecha de nacimiento a users
+ALTER TABLE users
+    ADD COLUMN birthdate DATE NULL AFTER rut_verified;

@@ -63,6 +63,8 @@ $router->group(['prefix' => '/api'], function (Router $r) {
         $r->put('/profile/addresses/{id}',           'MercadoSordo\Controllers\ProfileController@updateAddress');
         $r->patch('/profile/addresses/{id}/default', 'MercadoSordo\Controllers\ProfileController@setDefault');
         $r->delete('/profile/addresses/{id}',        'MercadoSordo\Controllers\ProfileController@deleteAddress');
+        $r->post('/profile/avatar',                   'MercadoSordo\Controllers\ProfileController@uploadAvatar');
+        $r->delete('/profile/avatar',                 'MercadoSordo\Controllers\ProfileController@deleteAvatar');
     });
 
     // Admin
