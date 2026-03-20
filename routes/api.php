@@ -30,6 +30,10 @@ $router->group(['prefix' => '/api'], function (Router $r) {
     $r->get('/categories',         'MercadoSordo\Controllers\AdminController@categories');
 
     // Carrito — guest + auth
+    // Webhooks — públicos (sin auth)
+    $r->post('/webhooks/mercadopago/ipn',     'MercadoSordo\Controllers\MercadoPagoController@webhookIPN');
+    $r->post('/webhooks/bank-transfer/confirm','MercadoSordo\Controllers\BankTransferController@webhookConfirm');
+
     $r->get('/cart',               'MercadoSordo\Controllers\CartController@index');
     $r->post('/cart/items',        'MercadoSordo\Controllers\CartController@addItem');
     $r->patch('/cart/items/{id}',  'MercadoSordo\Controllers\CartController@updateItem');
@@ -70,6 +74,18 @@ $router->group(['prefix' => '/api'], function (Router $r) {
         $r->post('/profile/avatar',                   'MercadoSordo\Controllers\ProfileController@uploadAvatar');
         $r->delete('/profile/avatar',                 'MercadoSordo\Controllers\ProfileController@deleteAvatar');
     });
+
+    // ── Mercado Pago OAuth ──────────────────────────────────────────────
+    $r->get('/vendor/mp/status',              'MercadoSordo\Controllers\MercadoPagoController@accountStatus');
+    $r->get('/vendor/mp/authorize',           'MercadoSordo\Controllers\MercadoPagoController@authorize');
+    $r->get('/vendor/mp/callback',            'MercadoSordo\Controllers\MercadoPagoController@oauthCallback');
+    $r->post('/vendor/mp/disconnect',         'MercadoSordo\Controllers\MercadoPagoController@disconnect');
+    $r->post('/payments/mercadopago/create',  'MercadoSordo\Controllers\MercadoPagoController@createPreference');
+
+    // ── Transferencia Bancaria (Khipu) ───────────────────────────────────
+    $r->get('/vendor/bank/status',            'MercadoSordo\Controllers\BankTransferController@bankAccountStatus');
+    $r->post('/vendor/bank-account/connect',  'MercadoSordo\Controllers\BankTransferController@connectBankAccount');
+    $r->post('/payments/bank-transfer/create','MercadoSordo\Controllers\BankTransferController@createPayment');
 
     // Admin
     $r->group(['prefix' => '/admin', 'middleware' => [AuthMiddleware::class, AdminMiddleware::class]], function (Router $r) {

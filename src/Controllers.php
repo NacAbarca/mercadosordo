@@ -874,6 +874,284 @@ class ProductImageController
 }
 
 // ============================================================
+// MercadoPagoController — OAuth + Preferencias + Webhook
+// ============================================================
+class MercadoPagoController
+{
+    private function cfg(): array
+    {
+        return [
+            'app_id'       => env('MP_APP_ID', ''),
+            'client_id'    => env('MP_CLIENT_ID', ''),
+            'client_secret'=> env('MP_CLIENT_SECRET', ''),
+            'commission'   => (float)env('MP_COMMISSION', 5.0),
+            'base_url'     => 'https://api.mercadopago.com',
+            'oauth_url'    => 'https://auth.mercadopago.com/authorization',
+            'redirect_uri' => env('APP_URL','http://localhost:8080').'/api/vendor/mp/callback',
+            'sandbox'      => env('MP_ENV','sandbox') === 'sandbox',
+        ];
+    }
+
+    private function curl(string $method, string $url, array $data=[], array $headers=[]): array
+    {
+        $ch = curl_init();
+        curl_setopt_array($ch,[
+            CURLOPT_URL            => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 30,
+            CURLOPT_HTTPHEADER     => array_merge(['Content-Type: application/json','Accept: application/json'], $headers),
+            CURLOPT_SSL_VERIFYPEER => true,
+        ]);
+        if (in_array($method,['POST','PUT','PATCH'])) {
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        }
+        $res  = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err  = curl_error($ch);
+        curl_close($ch);
+        if ($err) throw new \RuntimeException("cURL: {$err}");
+        return ['status'=>$code,'body'=>json_decode($res,true)??[],'raw'=>$res];
+    }
+
+    public function accountStatus(Request $req): void
+    {
+        $acc = DB::getInstance()->fetch(
+            "SELECT mp_email, mp_public_key, is_active, connected_at FROM vendor_payment_accounts WHERE vendor_id=?",
+            [Auth::id()]
+        );
+        Response::json(['connected'=>!empty($acc)&&$acc['is_active'],'account'=>$acc]);
+    }
+
+    public function authorize(Request $req): void
+    {
+        $cfg   = $this->cfg();
+        $state = bin2hex(random_bytes(16));
+        DB::getInstance()->query(
+            "INSERT INTO user_tokens(user_id,token,type,expires_at) VALUES(?,?,'mp_oauth',DATE_ADD(NOW(),INTERVAL 10 MINUTE)) ON DUPLICATE KEY UPDATE token=VALUES(token),expires_at=VALUES(expires_at)",
+            [Auth::id(),$state]
+        );
+        $url = $cfg['oauth_url'].'?'.http_build_query([
+            'response_type'=>'code','client_id'=>$cfg['client_id'],
+            'redirect_uri'=>$cfg['redirect_uri'],'state'=>$state,
+        ]);
+        Response::json(['redirect_url'=>$url]);
+    }
+
+    public function oauthCallback(Request $req): void
+    {
+        $code = $req->input('code');
+        if (!$code) Response::json(['error'=>'Código OAuth no recibido.'],400);
+        $cfg = $this->cfg();
+        $res = $this->curl('POST',$cfg['base_url'].'/oauth/token',[
+            'client_id'=>$cfg['client_id'],'client_secret'=>$cfg['client_secret'],
+            'code'=>$code,'redirect_uri'=>$cfg['redirect_uri'],'grant_type'=>'authorization_code',
+        ]);
+        if ($res['status']!==200||empty($res['body']['access_token']))
+            Response::json(['error'=>'Error obteniendo token MP.','detail'=>$res['body']],400);
+        $token = $res['body'];
+        $db    = DB::getInstance();
+        $data  = [
+            'vendor_id'=>Auth::id(),'mp_user_id'=>$token['user_id']??'',
+            'mp_access_token'=>$token['access_token'],
+            'mp_refresh_token'=>$token['refresh_token']??null,
+            'mp_public_key'=>$token['public_key']??null,
+            'token_expires_at'=>isset($token['expires_in'])?date('Y-m-d H:i:s',time()+(int)$token['expires_in']):null,
+            'is_active'=>1,
+        ];
+        $existing = $db->fetch("SELECT id FROM vendor_payment_accounts WHERE vendor_id=?",[Auth::id()]);
+        $existing ? $db->update('vendor_payment_accounts',$data,'vendor_id=?',[Auth::id()])
+                  : $db->insert('vendor_payment_accounts',$data);
+        Response::json(['message'=>'Mercado Pago conectado.']);
+    }
+
+    public function createPreference(Request $req): void
+    {
+        $orderId = (int)$req->input('order_id');
+        $db      = DB::getInstance();
+        $order   = $db->fetch("SELECT * FROM orders WHERE id=? AND buyer_id=?",[$orderId,Auth::id()]);
+        if (!$order) Response::json(['error'=>'Orden no encontrada.'],404);
+        if ($order['status']!=='pending') Response::json(['error'=>'Orden ya procesada.'],400);
+        $items   = $db->fetchAll("SELECT oi.*,p.seller_id FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE oi.order_id=?",[$orderId]);
+        $sellerId= $items[0]['seller_id'];
+        $account = $db->fetch("SELECT * FROM vendor_payment_accounts WHERE vendor_id=? AND is_active=1",[$sellerId]);
+        if (!$account) Response::json(['error'=>'El vendedor no tiene Mercado Pago configurado.'],400);
+        $cfg    = $this->cfg();
+        $total  = (float)$order['total'];
+        $comm   = round($total*$cfg['commission']/100,2);
+        $appUrl = env('APP_URL','http://localhost:8080');
+        $buyer  = $db->fetch("SELECT name,email FROM users WHERE id=?",[Auth::id()]);
+        $res    = $this->curl('POST',$cfg['base_url'].'/checkout/preferences',[
+            'items'=>array_map(fn($i)=>['id'=>(string)$i['product_id'],'title'=>$i['title'],'quantity'=>(int)$i['quantity'],'unit_price'=>(float)$i['price'],'currency_id'=>'CLP'],$items),
+            'payer'=>['name'=>$buyer['name'],'email'=>$buyer['email']],
+            'marketplace_fee'=>$comm,
+            'back_urls'=>['success'=>$appUrl.'/checkout/success?order_id='.$orderId,'failure'=>$appUrl.'/checkout/failure?order_id='.$orderId,'pending'=>$appUrl.'/checkout/pending?order_id='.$orderId],
+            'auto_return'=>'approved',
+            'notification_url'=>$appUrl.'/api/webhooks/mercadopago/ipn',
+            'external_reference'=>$order['order_number'],
+        ],['Authorization: Bearer '.$account['mp_access_token']]);
+        if ($res['status']!==201) Response::json(['error'=>'Error creando preferencia MP.','detail'=>$res['body']],400);
+        $prefId = $res['body']['id'];
+        $db->update('orders',['mp_preference_id'=>$prefId],'id=?',[$orderId]);
+        $db->insert('payments',['order_id'=>$orderId,'vendor_id'=>$sellerId,'payment_method'=>'mercadopago','mp_preference_id'=>$prefId,'amount'=>$total,'commission_pct'=>$cfg['commission'],'commission_amount'=>$comm,'vendor_amount'=>$total-$comm,'status'=>'pending','raw_response'=>json_encode($res['body'])]);
+        $isSandbox = $cfg['sandbox'];
+        Response::json(['preference_id'=>$prefId,'init_point'=>$isSandbox?($res['body']['sandbox_init_point']??$res['body']['init_point']):$res['body']['init_point'],'amount'=>$total,'commission'=>$comm]);
+    }
+
+    public function webhookIPN(Request $req): void
+    {
+        $data  = $req->all();
+        $topic = $data['topic']??$data['type']??'';
+        $resId = $data['id']??$data['data']['id']??null;
+        if ($topic!=='payment'||!$resId){http_response_code(200);exit;}
+        $db  = DB::getInstance();
+        $pay = $db->fetch("SELECT p.*,vpa.mp_access_token FROM payments p JOIN vendor_payment_accounts vpa ON vpa.vendor_id=p.vendor_id WHERE p.mp_preference_id IS NOT NULL ORDER BY p.created_at DESC LIMIT 1");
+        if (!$pay){http_response_code(200);exit;}
+        $cfg = $this->cfg();
+        $res = $this->curl('GET',$cfg['base_url'].'/v1/payments/'.$resId,[],['Authorization: Bearer '.$pay['mp_access_token']]);
+        if ($res['status']!==200){http_response_code(200);exit;}
+        $mp = $res['body'];
+        $status = match($mp['status']??''){'approved'=>'approved','rejected'=>'rejected','cancelled'=>'cancelled',default=>'in_process'};
+        $db->update('payments',['mp_payment_id'=>(string)$resId,'status'=>$status,'status_detail'=>$mp['status_detail']??null,'payer_email'=>$mp['payer']['email']??null,'raw_response'=>json_encode($mp)],'id=?',[$pay['id']]);
+        if ($status==='approved'){
+            $db->update('orders',['status'=>'paid','payment_id'=>(string)$resId],'id=?',[$pay['order_id']]);
+            $db->insert('order_tracking',['order_id'=>$pay['order_id'],'status'=>'paid','description'=>'Pago MP confirmado. ID:'.$resId]);
+        }
+        http_response_code(200);echo json_encode(['status'=>'ok']);exit;
+    }
+
+    public function disconnect(Request $req): void
+    {
+        DB::getInstance()->update('vendor_payment_accounts',['is_active'=>0],'vendor_id=?',[Auth::id()]);
+        Response::json(['message'=>'Cuenta MP desconectada.']);
+    }
+}
+
+// ============================================================
+// BankTransferController — Khipu + Cuenta bancaria vendedor
+// ============================================================
+class BankTransferController
+{
+    private function cfg(): array
+    {
+        return [
+            'receiver_id' => env('KHIPU_RECEIVER_ID',''),
+            'secret'      => env('KHIPU_SECRET',''),
+            'base_url'    => 'https://khipu.com/api/2.0',
+            'commission'  => (float)env('BANK_COMMISSION',5.0),
+            'app_url'     => env('APP_URL','http://localhost:8080'),
+        ];
+    }
+
+    private function khipuRequest(string $method, string $endpoint, array $data=[]): array
+    {
+        $cfg  = $this->cfg();
+        $url  = $cfg['base_url'].$endpoint;
+        $body = http_build_query($data);
+        $hash = hash_hmac('sha256', $method."
+".hash('sha256',$body)."
+".parse_url($url,PHP_URL_PATH), $cfg['secret']);
+        $auth = 'Basic '.base64_encode($cfg['receiver_id'].':'.$hash);
+        $ch   = curl_init();
+        curl_setopt_array($ch,[
+            CURLOPT_URL=>$url, CURLOPT_RETURNTRANSFER=>true, CURLOPT_TIMEOUT=>30,
+            CURLOPT_HTTPHEADER=>['Content-Type: application/x-www-form-urlencoded','Authorization: '.$auth],
+        ]);
+        if ($method==='POST'){curl_setopt($ch,CURLOPT_POST,true);curl_setopt($ch,CURLOPT_POSTFIELDS,$body);}
+        $res  = curl_exec($ch);
+        $code = curl_getinfo($ch,CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        return ['status'=>$code,'body'=>json_decode($res,true)??[]];
+    }
+
+    public function connectBankAccount(Request $req): void
+    {
+        $data = $req->validate([
+            'bank_name'      => 'required',
+            'account_number' => 'required',
+            'account_type'   => 'required',
+            'account_name'   => 'required',
+        ]);
+        $db      = DB::getInstance();
+        $user    = $db->fetch("SELECT rut FROM users WHERE id=?",[Auth::id()]);
+        if (empty($user['rut'])) Response::json(['error'=>'Debes registrar tu RUT antes de conectar cuenta bancaria.'],400);
+        $existing = $db->fetch("SELECT id FROM vendor_bank_accounts WHERE vendor_id=?",[Auth::id()]);
+        $record   = [
+            'vendor_id'     =>Auth::id(),
+            'bank_name'     =>trim($data['bank_name']),
+            'account_type'  =>$data['account_type'],
+            'account_number'=>trim($data['account_number']),
+            'account_rut'   =>$user['rut'],
+            'account_name'  =>trim($data['account_name']),
+            'account_email' =>$req->input('account_email'),
+            'is_active'     =>1,
+        ];
+        $existing ? $db->update('vendor_bank_accounts',$record,'vendor_id=?',[Auth::id()])
+                  : $db->insert('vendor_bank_accounts',$record);
+        Response::json(['message'=>'Cuenta bancaria registrada correctamente.']);
+    }
+
+    public function bankAccountStatus(Request $req): void
+    {
+        $acc = DB::getInstance()->fetch(
+            "SELECT bank_name,account_type,account_name,is_active,created_at FROM vendor_bank_accounts WHERE vendor_id=?",
+            [Auth::id()]
+        );
+        Response::json(['connected'=>!empty($acc)&&$acc['is_active'],'account'=>$acc]);
+    }
+
+    public function createPayment(Request $req): void
+    {
+        $orderId = (int)$req->input('order_id');
+        $db      = DB::getInstance();
+        $order   = $db->fetch("SELECT * FROM orders WHERE id=? AND buyer_id=?",[$orderId,Auth::id()]);
+        if (!$order) Response::json(['error'=>'Orden no encontrada.'],404);
+        if ($order['status']!=='pending') Response::json(['error'=>'Orden ya procesada.'],400);
+        $items    = $db->fetchAll("SELECT oi.*,p.seller_id FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE oi.order_id=?",[$orderId]);
+        $sellerId = $items[0]['seller_id'];
+        $bankAcc  = $db->fetch("SELECT * FROM vendor_bank_accounts WHERE vendor_id=? AND is_active=1",[$sellerId]);
+        if (!$bankAcc) Response::json(['error'=>'El vendedor no tiene cuenta bancaria configurada.'],400);
+        $cfg   = $this->cfg();
+        $total = (float)$order['total'];
+        $comm  = round($total*$cfg['commission']/100,2);
+        $buyer = $db->fetch("SELECT name,email FROM users WHERE id=?",[Auth::id()]);
+        // Crear pago en Khipu
+        $res = $this->khipuRequest('POST','/payments',[
+            'subject'          =>'Pago MercadoSordo - '.$order['order_number'],
+            'currency'         =>'CLP',
+            'amount'           =>$total,
+            'transaction_id'   =>$order['order_number'],
+            'payer_name'       =>$buyer['name'],
+            'payer_email'      =>$buyer['email'],
+            'return_url'       =>$cfg['app_url'].'/checkout/success?order_id='.$orderId,
+            'cancel_url'       =>$cfg['app_url'].'/checkout/failure?order_id='.$orderId,
+            'notify_url'       =>$cfg['app_url'].'/api/webhooks/bank-transfer/confirm',
+            'bank_id'          =>$bankAcc['bank_name'],
+        ]);
+        if ($res['status']!==201) Response::json(['error'=>'Error creando pago Khipu.','detail'=>$res['body']],400);
+        $khipuId  = $res['body']['payment_id'];
+        $payUrl   = $res['body']['payment_url'];
+        $simUrl   = $res['body']['simplified_transfer_url']??$payUrl;
+        $db->insert('payments',['order_id'=>$orderId,'vendor_id'=>$sellerId,'payment_method'=>'bank_transfer','khipu_payment_id'=>$khipuId,'khipu_payment_url'=>$payUrl,'amount'=>$total,'commission_pct'=>$cfg['commission'],'commission_amount'=>$comm,'vendor_amount'=>$total-$comm,'status'=>'pending','raw_response'=>json_encode($res['body'])]);
+        Response::json(['payment_id'=>$khipuId,'payment_url'=>$simUrl,'amount'=>$total,'commission'=>$comm,'vendor_amount'=>$total-$comm]);
+    }
+
+    public function webhookConfirm(Request $req): void
+    {
+        $data     = $req->all();
+        $khipuId  = $data['payment_id']??null;
+        if (!$khipuId){http_response_code(200);exit;}
+        $db  = DB::getInstance();
+        $pay = $db->fetch("SELECT * FROM payments WHERE khipu_payment_id=?",[$khipuId]);
+        if (!$pay){http_response_code(200);exit;}
+        $db->update('payments',['status'=>'approved','raw_response'=>json_encode($data)],'id=?',[$pay['id']]);
+        $db->update('orders',['status'=>'paid','payment_id'=>$khipuId],'id=?',[$pay['order_id']]);
+        $db->insert('order_tracking',['order_id'=>$pay['order_id'],'status'=>'paid','description'=>'Transferencia bancaria confirmada via Khipu. ID:'.$khipuId]);
+        http_response_code(200);echo json_encode(['status'=>'ok']);exit;
+    }
+}
+
+// ============================================================
 // ReviewController
 // ============================================================
 class ReviewController

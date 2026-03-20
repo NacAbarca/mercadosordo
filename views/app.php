@@ -1007,6 +1007,100 @@
         </div>
       </div>
 
+      <!-- ── PANEL MÉTODOS DE PAGO (vendedor) ── -->
+      <div class="bg-white rounded shadow-sm p-3 mb-3"
+           v-if="auth.user?.role === 'seller' || auth.user?.role === 'admin'">
+        <div class="fw-bold small mb-2"><i class="bi bi-credit-card me-1 text-primary"></i>Métodos de cobro</div>
+        <div class="row g-2">
+          <!-- Mercado Pago -->
+          <div class="col-md-6">
+            <div class="p-2 rounded border d-flex align-items-center justify-content-between">
+              <div class="d-flex align-items-center gap-2">
+                <img src="https://www.mercadopago.com/org-img/MP3/home/logomp.png" style="height:18px">
+                <div class="small" :class="mpStatus.connected?'text-success fw-bold':'text-muted'">
+                  {{ mpStatus.connected ? '✓ ' + mpStatus.account?.email : 'Sin conectar' }}
+                </div>
+              </div>
+              <button v-if="!mpStatus.connected" class="btn btn-primary btn-sm py-0 px-2" style="font-size:.75rem" @click="connectMercadoPago">Conectar</button>
+              <button v-else class="btn btn-outline-danger btn-sm py-0 px-2" style="font-size:.75rem" @click="disconnectMercadoPago">Desconectar</button>
+            </div>
+          </div>
+          <!-- Cuenta Bancaria -->
+          <div class="col-md-6">
+            <div class="p-2 rounded border d-flex align-items-center justify-content-between">
+              <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-bank2 text-primary"></i>
+                <div class="small" :class="bankStatus.connected?'text-success fw-bold':'text-muted'">
+                  {{ bankStatus.connected ? '✓ ' + bankStatus.account?.bank_name : 'Sin cuenta bancaria' }}
+                </div>
+              </div>
+              <button class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size:.75rem" @click="openBankForm=true">
+                {{ bankStatus.connected ? 'Editar' : 'Conectar' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal cuenta bancaria -->
+      <div v-if="openBankForm"
+           style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;display:flex;align-items:center;justify-content:center;padding:1rem"
+           @click.self="openBankForm=false">
+        <div class="bg-white rounded p-4 shadow w-100" style="max-width:480px">
+          <h5 class="fw-bold mb-3"><i class="bi bi-bank2 me-2 text-primary"></i>Cuenta bancaria para cobros</h5>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold small">Banco <span class="text-danger">*</span></label>
+              <select class="form-select form-select-sm" v-model="bankForm.bank_name">
+                <option value="">— Selecciona —</option>
+                <option>Banco de Chile</option>
+                <option>BancoEstado</option>
+                <option>Santander</option>
+                <option>BCI</option>
+                <option>Itaú</option>
+                <option>Scotiabank</option>
+                <option>BICE</option>
+                <option>Security</option>
+                <option>Falabella</option>
+                <option>Ripley</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold small">Tipo de cuenta <span class="text-danger">*</span></label>
+              <select class="form-select form-select-sm" v-model="bankForm.account_type">
+                <option value="cuenta_corriente">Cuenta Corriente</option>
+                <option value="cuenta_ahorro">Cuenta de Ahorro</option>
+                <option value="cuenta_vista">Cuenta Vista</option>
+                <option value="cuenta_rut">Cuenta RUT</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-bold small">Número de cuenta <span class="text-danger">*</span></label>
+              <input type="text" class="form-control form-control-sm" v-model="bankForm.account_number" placeholder="0000000000">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-bold small">Nombre titular <span class="text-danger">*</span></label>
+              <input type="text" class="form-control form-control-sm" v-model="bankForm.account_name" placeholder="Nombre completo">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-bold small">Email para notificaciones</label>
+              <input type="email" class="form-control form-control-sm" v-model="bankForm.account_email">
+            </div>
+            <div class="col-12 p-2 bg-light rounded small text-muted">
+              <i class="bi bi-info-circle me-1"></i>El RUT registrado en tu perfil (<strong>{{ auth.user?.rut }}</strong>) se usará como titular.
+            </div>
+          </div>
+          <div class="alert alert-danger mt-2 small" v-if="bankFormError">{{ bankFormError }}</div>
+          <div class="d-flex gap-2 mt-4">
+            <button class="btn btn-primary fw-bold" @click="saveBankAccount" :disabled="bankFormLoading">
+              <span v-if="bankFormLoading" class="spinner-border spinner-border-sm me-1"></span>
+              Guardar cuenta
+            </button>
+            <button class="btn btn-outline-secondary" @click="openBankForm=false">Cancelar</button>
+          </div>
+        </div>
+      </div>
+
       <!-- ── TAB: ESTADÍSTICAS ── -->
       <div v-if="sellerTab === 'stats'">
         <div class="row g-3 mb-4">
@@ -1620,6 +1714,388 @@
       <div v-if="!selectedProduct.reviews?.length" class="text-muted">Sin reseñas aún.</div>
     </div>
   </div>
+
+
+    <!-- ─── CHECKOUT ─── -->
+    <template v-if="currentView === 'checkout'">
+      <div class="container py-4" style="max-width:960px">
+        <h3 class="section-title mb-4"><i class="bi bi-bag-check me-2 text-primary"></i>Finalizar compra</h3>
+
+        <!-- Steps -->
+        <div class="d-flex align-items-center gap-2 mb-4">
+          <div v-for="(step,i) in ['Resumen','Dirección','Pago']" :key="i"
+               class="d-flex align-items-center gap-2">
+            <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold"
+                 style="width:32px;height:32px;font-size:.85rem"
+                 :class="checkoutStep > i ? 'bg-success text-white' : checkoutStep === i ? 'bg-primary text-white' : 'bg-light text-muted border'">
+              <i class="bi bi-check-lg" v-if="checkoutStep > i"></i>
+              <span v-else>{{ i+1 }}</span>
+            </div>
+            <span class="fw-bold small" :class="checkoutStep === i ? 'text-primary' : 'text-muted'">{{ step }}</span>
+            <i class="bi bi-chevron-right text-muted small" v-if="i < 2"></i>
+          </div>
+        </div>
+
+        <div class="row g-4">
+          <div class="col-md-8">
+
+            <!-- Paso 1: Resumen carrito -->
+            <div v-if="checkoutStep === 0" class="bg-white rounded shadow-sm p-4">
+              <h5 class="fw-bold mb-3">Resumen de tu compra</h5>
+              <div v-for="item in cart.items" :key="item.id" class="d-flex gap-3 align-items-center mb-3 pb-3 border-bottom">
+                <img :src="item.image || 'https://via.placeholder.com/60'" style="width:60px;height:60px;object-fit:contain;background:#f8f8f8" class="rounded">
+                <div class="flex-grow-1">
+                  <div class="fw-bold small">{{ item.title }}</div>
+                  <div class="text-muted small">Cantidad: {{ item.quantity }}</div>
+                </div>
+                <div class="fw-bold text-primary">{{ formatCLP(item.price * item.quantity) }}</div>
+              </div>
+              <button class="btn btn-primary fw-bold w-100 mt-2" @click="checkoutStep=1">
+                Continuar <i class="bi bi-arrow-right ms-1"></i>
+              </button>
+            </div>
+
+            <!-- Paso 2: Dirección -->
+            <div v-if="checkoutStep === 1" class="bg-white rounded shadow-sm p-4">
+              <h5 class="fw-bold mb-3">Selecciona dirección de envío</h5>
+              <div v-if="addressesLoading" class="text-center py-3"><div class="spinner-border text-primary"></div></div>
+              <div v-else>
+                <div v-if="addresses.length === 0" class="text-center py-4 text-muted">
+                  <i class="bi bi-geo-alt fs-1"></i>
+                  <p class="mt-2">No tienes direcciones guardadas.</p>
+                  <button class="btn btn-outline-primary btn-sm" @click="navigate('profile'); profileTab='addresses'">
+                    Agregar dirección
+                  </button>
+                </div>
+                <div v-for="addr in addresses" :key="addr.id"
+                     class="p-3 rounded border mb-2"
+                     :class="selectedAddressId === addr.id ? 'border-primary bg-primary bg-opacity-10' : ''"
+                     style="cursor:pointer" @click="selectedAddressId = addr.id">
+                  <div class="d-flex align-items-center gap-2">
+                    <i class="bi" :class="selectedAddressId===addr.id ? 'bi-record-circle-fill text-primary' : 'bi-circle text-muted'"></i>
+                    <div>
+                      <div class="fw-bold small">{{ addr.label }} — {{ addr.full_name }}</div>
+                      <div class="text-muted small">{{ addr.address }}, {{ addr.city }}, {{ addr.region }}</div>
+                    </div>
+                    <span class="badge bg-success ms-auto" v-if="addr.is_default">Principal</span>
+                  </div>
+                </div>
+              </div>
+              <div class="d-flex gap-2 mt-3">
+                <button class="btn btn-outline-secondary" @click="checkoutStep=0"><i class="bi bi-arrow-left me-1"></i>Volver</button>
+                <button class="btn btn-primary fw-bold flex-grow-1" :disabled="!selectedAddressId" @click="checkoutStep=2">
+                  Continuar <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Paso 3: Pago -->
+            <div v-if="checkoutStep === 2" class="bg-white rounded shadow-sm p-4">
+              <h5 class="fw-bold mb-3">Método de pago</h5>
+
+              <!-- Estado orden -->
+              <div v-if="checkoutOrderId && !mpInitPoint" class="text-center py-3">
+                <div class="spinner-border text-primary mb-2"></div>
+                <p class="text-muted small">Preparando tu pago...</p>
+              </div>
+
+              <!-- Botón MP -->
+              <div v-if="mpInitPoint" class="text-center py-4">
+                <img src="https://www.mercadopago.com/org-img/MP3/home/logomp.png" style="height:36px" class="mb-3">
+                <p class="text-muted small mb-4">Serás redirigido a Mercado Pago para completar el pago de forma segura.</p>
+                <a :href="mpInitPoint" class="btn btn-primary fw-bold px-5 py-3 w-100" style="font-size:1.1rem;background:#009ee3;border-color:#009ee3">
+                  <i class="bi bi-shield-check me-2"></i>Pagar {{ formatCLP(cart.total) }} con Mercado Pago
+                </a>
+                <p class="text-muted mt-3" style="font-size:.78rem">
+                  <i class="bi bi-lock me-1"></i>Pago 100% seguro · SSL · No guardamos datos de tarjeta
+                </p>
+              </div>
+
+              <!-- Error -->
+              <div class="alert alert-danger" v-if="checkoutError">
+                <i class="bi bi-exclamation-triangle me-2"></i>{{ checkoutError }}
+              </div>
+
+              <div class="d-flex gap-2 mt-3" v-if="!mpInitPoint">
+                <button class="btn btn-outline-secondary" @click="checkoutStep=1"><i class="bi bi-arrow-left me-1"></i>Volver</button>
+                <button class="btn btn-primary fw-bold flex-grow-1" @click="doCheckout" :disabled="checkoutLoading">
+                  <span v-if="checkoutLoading" class="spinner-border spinner-border-sm me-2"></span>
+                  <i class="bi bi-credit-card me-1" v-else></i>Proceder al pago
+                </button>
+              </div>
+            </div>
+
+            <!-- Confirmación -->
+            <div v-if="checkoutStep === 3" class="bg-white rounded shadow-sm p-4 text-center">
+              <i class="bi bi-check-circle-fill text-success" style="font-size:4rem"></i>
+              <h4 class="fw-bold mt-3">¡Pago recibido!</h4>
+              <p class="text-muted">Orden <strong>{{ checkoutOrderNumber }}</strong> creada correctamente.</p>
+              <p class="text-muted small">Recibirás un email con el seguimiento de tu compra.</p>
+              <div class="d-flex gap-2 justify-content-center mt-4">
+                <button class="btn btn-outline-primary" @click="navigate('orders')">Ver mis compras</button>
+                <button class="btn btn-primary" @click="navigate('home')">Seguir comprando</button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Resumen lateral -->
+          <div class="col-md-4">
+            <div class="bg-white rounded shadow-sm p-4 sticky-top" style="top:80px">
+              <h6 class="fw-bold mb-3">Resumen del pedido</h6>
+              <div class="d-flex justify-content-between mb-2">
+                <span class="text-muted small">Subtotal ({{ cart.count }} items)</span>
+                <span>{{ formatCLP(cart.total) }}</span>
+              </div>
+              <div class="d-flex justify-content-between mb-2 text-success">
+                <span class="small">Envío</span><span>Gratis</span>
+              </div>
+              <hr>
+              <div class="d-flex justify-content-between fw-bold">
+                <span>Total</span>
+                <span class="text-primary fs-5">{{ formatCLP(cart.total) }}</span>
+              </div>
+              <div class="mt-3 pt-3 border-top">
+                <div class="d-flex align-items-center gap-2 small text-muted mb-1">
+                  <i class="bi bi-shield-check text-success"></i>Compra protegida
+                </div>
+                <div class="d-flex align-items-center gap-2 small text-muted mb-1">
+                  <i class="bi bi-arrow-counterclockwise text-success"></i>Devolución hasta 30 días
+                </div>
+                <div class="d-flex align-items-center gap-2 small text-muted">
+                  <i class="bi bi-lock text-success"></i>Pago 100% seguro
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+
+    <!-- ─── CHECKOUT ─── -->
+    <template v-if="currentView === 'checkout'">
+      <div class="container py-4" style="max-width:980px">
+        <h3 class="section-title mb-4"><i class="bi bi-bag-check me-2 text-primary"></i>Finalizar compra</h3>
+
+        <!-- Stepper -->
+        <div class="d-flex align-items-center gap-2 mb-4">
+          <template v-for="(step,i) in ['Resumen','Dirección','Pago']" :key="i">
+            <div class="d-flex align-items-center gap-2">
+              <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold"
+                   style="width:32px;height:32px;font-size:.85rem;transition:all .2s"
+                   :class="checkoutStep>i?'bg-success text-white':checkoutStep===i?'bg-primary text-white':'bg-light text-muted border'">
+                <i class="bi bi-check-lg" v-if="checkoutStep>i"></i>
+                <span v-else>{{i+1}}</span>
+              </div>
+              <span class="fw-bold small d-none d-sm-inline"
+                    :class="checkoutStep===i?'text-primary':'text-muted'">{{step}}</span>
+            </div>
+            <div v-if="i<2" class="flex-grow-1 border-top" style="max-width:60px"></div>
+          </template>
+        </div>
+
+        <div class="row g-4">
+          <div class="col-md-8">
+
+            <!-- PASO 1: Resumen -->
+            <div v-if="checkoutStep===0" class="bg-white rounded shadow-sm p-4">
+              <h5 class="fw-bold mb-3">Resumen de tu compra</h5>
+              <div v-for="item in cart.items" :key="item.id"
+                   class="d-flex gap-3 align-items-center mb-3 pb-3 border-bottom">
+                <img :src="item.image||'https://via.placeholder.com/60'"
+                     style="width:60px;height:60px;object-fit:contain;background:#f8f8f8" class="rounded border">
+                <div class="flex-grow-1">
+                  <div class="fw-bold small">{{item.title}}</div>
+                  <div class="text-muted small">Cant: {{item.quantity}} · {{formatCLP(item.price)}} c/u</div>
+                </div>
+                <div class="fw-bold">{{formatCLP(item.price*item.quantity)}}</div>
+              </div>
+              <button class="btn btn-primary fw-bold w-100 py-2" @click="checkoutStep=1">
+                Continuar <i class="bi bi-arrow-right ms-1"></i>
+              </button>
+            </div>
+
+            <!-- PASO 2: Dirección -->
+            <div v-if="checkoutStep===1" class="bg-white rounded shadow-sm p-4">
+              <h5 class="fw-bold mb-3"><i class="bi bi-geo-alt me-2 text-primary"></i>Dirección de envío</h5>
+              <div v-if="addressesLoading" class="text-center py-3"><div class="spinner-border text-primary"></div></div>
+              <div v-else>
+                <div v-if="addresses.length===0" class="text-center py-4">
+                  <i class="bi bi-geo-alt text-muted" style="font-size:2.5rem"></i>
+                  <p class="mt-2 text-muted">No tienes direcciones guardadas.</p>
+                  <button class="btn btn-outline-primary btn-sm"
+                          @click="profileTab='addresses'; navigate('profile')">
+                    <i class="bi bi-plus-lg me-1"></i>Agregar dirección
+                  </button>
+                </div>
+                <div v-for="addr in addresses" :key="addr.id"
+                     class="p-3 rounded border mb-2" style="cursor:pointer;transition:all .15s"
+                     :class="selectedAddressId===addr.id?'border-primary bg-primary bg-opacity-10':''"
+                     @click="selectedAddressId=addr.id">
+                  <div class="d-flex align-items-start gap-2">
+                    <i class="bi mt-1"
+                       :class="selectedAddressId===addr.id?'bi-record-circle-fill text-primary':'bi-circle text-muted'"></i>
+                    <div class="flex-grow-1">
+                      <div class="fw-bold small">{{addr.label}} — {{addr.full_name}}</div>
+                      <div class="text-muted small">{{addr.address}}, {{addr.city}}, {{addr.region}}</div>
+                    </div>
+                    <span class="badge bg-success" v-if="addr.is_default">Principal</span>
+                  </div>
+                </div>
+              </div>
+              <div class="d-flex gap-2 mt-3">
+                <button class="btn btn-outline-secondary" @click="checkoutStep=0">
+                  <i class="bi bi-arrow-left me-1"></i>Volver
+                </button>
+                <button class="btn btn-primary fw-bold flex-grow-1" :disabled="!selectedAddressId"
+                        @click="checkoutStep=2">
+                  Continuar <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- PASO 3: Método de pago -->
+            <div v-if="checkoutStep===2" class="bg-white rounded shadow-sm p-4">
+              <h5 class="fw-bold mb-4"><i class="bi bi-credit-card me-2 text-primary"></i>Método de pago</h5>
+
+              <!-- Selector método -->
+              <div v-if="!checkoutOrderId" class="row g-3 mb-4">
+                <!-- Mercado Pago -->
+                <div class="col-md-6">
+                  <div class="p-3 rounded border h-100" style="cursor:pointer;transition:all .15s"
+                       :class="selectedPayMethod==='mercadopago'?'border-primary bg-primary bg-opacity-10':''"
+                       @click="selectedPayMethod='mercadopago'">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                      <i class="bi" style="font-size:1.2rem"
+                         :class="selectedPayMethod==='mercadopago'?'bi-record-circle-fill text-primary':'bi-circle text-muted'"></i>
+                      <img src="https://www.mercadopago.com/org-img/MP3/home/logomp.png" style="height:24px">
+                    </div>
+                    <div class="fw-bold small">Mercado Pago</div>
+                    <div class="text-muted" style="font-size:.78rem">
+                      Tarjeta, débito, cuotas · Pago inmediato
+                    </div>
+                  </div>
+                </div>
+                <!-- Transferencia bancaria -->
+                <div class="col-md-6">
+                  <div class="p-3 rounded border h-100" style="cursor:pointer;transition:all .15s"
+                       :class="selectedPayMethod==='bank_transfer'?'border-primary bg-primary bg-opacity-10':''"
+                       @click="selectedPayMethod='bank_transfer'">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                      <i class="bi" style="font-size:1.2rem"
+                         :class="selectedPayMethod==='bank_transfer'?'bi-record-circle-fill text-primary':'bi-circle text-muted'"></i>
+                      <i class="bi bi-bank2 text-primary" style="font-size:1.4rem"></i>
+                    </div>
+                    <div class="fw-bold small">Transferencia Bancaria</div>
+                    <div class="text-muted" style="font-size:.78rem">
+                      Vía Khipu · Directo desde tu banco
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Botón pagar -->
+              <div v-if="!checkoutOrderId && !mpInitPoint && !bankPayUrl">
+                <div class="alert alert-info py-2 small mb-3" v-if="selectedPayMethod">
+                  <i class="bi bi-info-circle me-1"></i>
+                  <span v-if="selectedPayMethod==='mercadopago'">Serás redirigido a Mercado Pago para completar el pago.</span>
+                  <span v-else>Serás redirigido a Khipu para realizar la transferencia bancaria.</span>
+                </div>
+                <div class="d-flex gap-2">
+                  <button class="btn btn-outline-secondary" @click="checkoutStep=1">
+                    <i class="bi bi-arrow-left me-1"></i>Volver
+                  </button>
+                  <button class="btn btn-primary fw-bold flex-grow-1 py-2"
+                          :disabled="!selectedPayMethod||checkoutLoading"
+                          @click="doCheckout">
+                    <span v-if="checkoutLoading" class="spinner-border spinner-border-sm me-2"></span>
+                    <i class="bi bi-shield-lock me-1" v-else></i>
+                    Pagar {{formatCLP(cart.total)}}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Redirect MP -->
+              <div v-if="mpInitPoint" class="text-center py-3">
+                <div class="mb-3"><img src="https://www.mercadopago.com/org-img/MP3/home/logomp.png" style="height:36px"></div>
+                <p class="text-muted small mb-4">Haz clic para completar el pago de forma segura en Mercado Pago.</p>
+                <a :href="mpInitPoint" class="btn fw-bold px-5 py-3 w-100 text-white"
+                   style="background:#009ee3;border-color:#009ee3;font-size:1.05rem">
+                  <i class="bi bi-shield-check me-2"></i>Ir a Mercado Pago · {{formatCLP(cart.total)}}
+                </a>
+              </div>
+
+              <!-- Redirect Khipu -->
+              <div v-if="bankPayUrl" class="text-center py-3">
+                <i class="bi bi-bank2 text-primary" style="font-size:3rem"></i>
+                <p class="fw-bold mt-2">Transferencia lista</p>
+                <p class="text-muted small mb-4">Haz clic para realizar la transferencia bancaria vía Khipu.</p>
+                <a :href="bankPayUrl" class="btn btn-success fw-bold px-5 py-3 w-100" style="font-size:1.05rem">
+                  <i class="bi bi-bank2 me-2"></i>Transferir {{formatCLP(cart.total)}} vía Khipu
+                </a>
+              </div>
+
+              <!-- Error -->
+              <div class="alert alert-danger mt-3" v-if="checkoutError">
+                <i class="bi bi-exclamation-triangle me-2"></i>{{checkoutError}}
+              </div>
+            </div>
+
+            <!-- CONFIRMACIÓN -->
+            <div v-if="checkoutStep===3" class="bg-white rounded shadow-sm p-4 text-center">
+              <i class="bi bi-check-circle-fill text-success" style="font-size:4rem"></i>
+              <h4 class="fw-bold mt-3">¡Pago recibido!</h4>
+              <p class="text-muted">Orden <strong>{{checkoutOrderNumber}}</strong></p>
+              <p class="text-muted small mb-4">Recibirás un email con el seguimiento de tu compra.</p>
+              <div class="d-flex gap-2 justify-content-center">
+                <button class="btn btn-outline-primary" @click="navigate('orders')">
+                  <i class="bi bi-box me-1"></i>Mis compras
+                </button>
+                <button class="btn btn-primary" @click="navigate('home')">
+                  Seguir comprando
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Sidebar resumen -->
+          <div class="col-md-4">
+            <div class="bg-white rounded shadow-sm p-4 sticky-top" style="top:80px">
+              <h6 class="fw-bold mb-3">Tu pedido</h6>
+              <div class="d-flex justify-content-between mb-2 small">
+                <span class="text-muted">Subtotal ({{cart.count}} items)</span>
+                <span>{{formatCLP(cart.total)}}</span>
+              </div>
+              <div class="d-flex justify-content-between mb-2 small text-success">
+                <span>Envío</span><span>Gratis</span>
+              </div>
+              <div class="d-flex justify-content-between mb-2 small text-muted" v-if="selectedPayMethod">
+                <span>Comisión plataforma</span>
+                <span>Cargo al vendedor</span>
+              </div>
+              <hr>
+              <div class="d-flex justify-content-between fw-bold">
+                <span>Total a pagar</span>
+                <span class="text-primary fs-5">{{formatCLP(cart.total)}}</span>
+              </div>
+              <div class="mt-3 pt-3 border-top d-flex flex-column gap-1">
+                <div class="d-flex align-items-center gap-2 small text-muted">
+                  <i class="bi bi-shield-check text-success"></i>Compra protegida
+                </div>
+                <div class="d-flex align-items-center gap-2 small text-muted">
+                  <i class="bi bi-arrow-counterclockwise text-success"></i>Devolución 30 días
+                </div>
+                <div class="d-flex align-items-center gap-2 small text-muted">
+                  <i class="bi bi-lock text-success"></i>Pago 100% seguro
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
 
   <!-- ─── CART VIEW ─── -->
   <div class="container py-4" v-if="currentView === 'cart'">
@@ -2507,6 +2983,117 @@ const app = createApp({
       } catch { toast('Error al eliminar la cuenta.', 'error'); }
     }
 
+    // ── Checkout + Mercado Pago ────────────────────────────────────────────
+    const checkoutStep        = ref(0);
+    const selectedPayMethod   = ref('mercadopago');
+    const bankPayUrl          = ref('');
+    const checkoutLoading     = ref(false);
+    const checkoutError       = ref('');
+    const checkoutOrderId     = ref(null);
+    const checkoutOrderNumber = ref('');
+    const mpInitPoint         = ref('');
+    const selectedAddressId   = ref(null);
+
+    // Conectar MP (para vendedores)
+    const mpStatus   = ref({ connected: false, account: null });
+    const bankStatus = ref({ connected: false, account: null });
+    const openBankForm   = ref(false);
+    const bankFormLoading = ref(false);
+    const bankFormError   = ref('');
+    const bankForm = ref({
+      bank_name: '', account_type: 'cuenta_corriente',
+      account_number: '', account_name: '', account_email: ''
+    });
+
+    async function loadMpStatus() {
+      try { mpStatus.value = await api('GET', '/vendor/mp/status'); } catch {}
+    }
+
+    async function connectMercadoPago() {
+      try {
+        const r = await api('GET', '/vendor/mp/authorize');
+        window.location.href = r.redirect_url;
+      } catch (e) { toast(e.error || 'Error al conectar MP.', 'error'); }
+    }
+
+    async function disconnectMercadoPago() {
+      try {
+        await api('POST', '/vendor/mp/disconnect');
+        mpStatus.value = { connected: false, account: null };
+        toast('Cuenta Mercado Pago desconectada.');
+      } catch { toast('Error al desconectar.', 'error'); }
+    }
+
+    async function loadBankStatus() {
+      try { bankStatus.value = await api('GET', '/vendor/bank/status'); } catch {}
+    }
+
+    async function saveBankAccount() {
+      if (!bankForm.value.bank_name || !bankForm.value.account_number || !bankForm.value.account_name) {
+        bankFormError.value = 'Completa los campos obligatorios.'; return;
+      }
+      bankFormLoading.value = true; bankFormError.value = '';
+      try {
+        await api('POST', '/vendor/bank-account/connect', bankForm.value);
+        await loadBankStatus();
+        openBankForm.value = false;
+        toast('Cuenta bancaria guardada correctamente ✓');
+      } catch (e) {
+        bankFormError.value = e.error || 'Error al guardar la cuenta.';
+      } finally { bankFormLoading.value = false; }
+    }
+
+    async function doCheckout() {
+      if (!checkRut()) return;
+      if (!selectedAddressId.value) { toast('Selecciona una dirección de envío.', 'error'); return; }
+      if (!selectedPayMethod.value)  { toast('Selecciona un método de pago.', 'error'); return; }
+      checkoutLoading.value = true;
+      checkoutError.value   = '';
+      mpInitPoint.value     = '';
+      bankPayUrl.value      = '';
+      try {
+        // 1. Crear orden
+        const orderRes = await api('POST', '/orders/checkout', {
+          address_id:     selectedAddressId.value,
+          payment_method: selectedPayMethod.value,
+        });
+        checkoutOrderId.value     = orderRes.order_id;
+        checkoutOrderNumber.value = orderRes.order_number;
+
+        // 2. Crear pago según método
+        if (selectedPayMethod.value === 'mercadopago') {
+          const mpRes = await api('POST', '/payments/mercadopago/create', { order_id: orderRes.order_id });
+          mpInitPoint.value = mpRes.init_point;
+        } else {
+          const bankRes = await api('POST', '/payments/bank-transfer/create', { order_id: orderRes.order_id });
+          bankPayUrl.value = bankRes.payment_url;
+        }
+      } catch (e) {
+        checkoutError.value = e.error || 'Error al procesar el pago. Intenta nuevamente.';
+        checkoutOrderId.value = null;
+      } finally {
+        checkoutLoading.value = false;
+      }
+    }
+
+    function initCheckout() {
+      checkoutStep.value      = 0;
+      checkoutError.value     = '';
+      mpInitPoint.value       = '';
+      bankPayUrl.value        = '';
+      checkoutOrderId.value   = null;
+      selectedPayMethod.value = 'mercadopago';
+      selectedAddressId.value = addresses.value.find(a => a.is_default)?.id || null;
+      // Detectar retorno desde MP
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('order_id') && params.get('collection_status') === 'approved') {
+        checkoutOrderNumber.value = params.get('external_reference') || '';
+        checkoutStep.value = 3;
+        loadCart();
+        window.history.replaceState({}, '', '/checkout');
+      }
+    }
+
     const adminDash = ref({});
     const adminUsers = ref([]);
     const adminProducts = ref([]);
@@ -2559,8 +3146,9 @@ const app = createApp({
       if (view === 'products') loadProducts();
       if (view === 'cart') loadCart();
       if (view === 'orders') loadOrders();
-      if (view === 'my-products') { sellerTab.value = 'list'; loadMyProducts(); }
-      if (view === 'profile') { profileTab.value = 'data'; initProfileData(); loadAddresses(); }
+      if (view === 'my-products') { sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus(); }
+      if (view === 'profile')  { profileTab.value = 'data'; initProfileData(); loadAddresses(); }
+      if (view === 'checkout') { initCheckout(); loadAddresses(); }
       if (view === 'admin') { adminView.value = 'dashboard'; loadDashboard(); }
     }
 
@@ -2766,6 +3354,12 @@ const app = createApp({
       confirmDeleteProduct, doDeleteProduct, getCategoryName,
       updateAdminUser, updateOrderStatus,
       formatCLP, formatDate, statusBadge, statusLabel,
+      checkoutStep, checkoutLoading, checkoutError, checkoutOrderId,
+      checkoutOrderNumber, mpInitPoint, bankPayUrl, selectedAddressId, selectedPayMethod,
+      mpStatus, connectMercadoPago, disconnectMercadoPago,
+      bankStatus, openBankForm, bankForm, bankFormLoading, bankFormError,
+      loadBankStatus, saveBankAccount,
+      doCheckout, initCheckout, loadMpStatus,
     };
   }
 });
