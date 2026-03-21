@@ -1320,7 +1320,7 @@ class OrderManagementController
     }
 
     // ── Crear notificación ─────────────────────────────────
-    private function notify(DB $db, int $userId, string $type, string $title, string $body, string $icon = 'bi-bell', string $color = 'primary', string $entityType = null, int $entityId = null): void
+    private function notify(DB $db, int $userId, string $type, string $title, string $body, string $icon = 'bi-bell', string $color = 'primary', ?string $entityType = null, ?int $entityId = null): void
     {
         $db->insert('notifications', [
             'user_id'     => $userId,
