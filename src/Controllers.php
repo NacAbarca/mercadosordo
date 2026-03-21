@@ -322,7 +322,7 @@ class CartController
         $db   = DB::getInstance();
         $cart = $this->getOrCreateCart($req, $db);
         $items = $db->fetchAll(
-            "SELECT ci.*, p.title, p.price, p.free_shipping, p.stock, pi.url AS image
+            "SELECT ci.*, p.title, p.price, p.free_shipping, p.stock, p.seller_id, pi.url AS image
              FROM cart_items ci
              JOIN products p ON p.id = ci.product_id
              LEFT JOIN product_images pi ON pi.product_id = p.id AND pi.is_primary = 1
@@ -1134,10 +1134,102 @@ class BankTransferController
     public function bankAccountStatus(Request $req): void
     {
         $acc = DB::getInstance()->fetch(
-            "SELECT bank_name,account_type,account_name,is_active,created_at FROM vendor_bank_accounts WHERE vendor_id=?",
+            "SELECT * FROM vendor_bank_accounts WHERE vendor_id=?",
             [Auth::id()]
         );
         Response::json(['connected'=>!empty($acc)&&$acc['is_active'],'account'=>$acc]);
+    }
+
+    public function savePaymentMethods(Request $req): void
+    {
+        $data = $req->all();
+        $db   = DB::getInstance();
+        $user = $db->fetch("SELECT rut FROM users WHERE id=?", [Auth::id()]);
+
+        $existing = $db->fetch("SELECT id FROM vendor_bank_accounts WHERE vendor_id=?", [Auth::id()]);
+        $record = [
+            'vendor_id'           => Auth::id(),
+            'mp_enabled'          => !empty($data['mercadopago']['enabled']) ? 1 : 0,
+            'mp_link'             => $data['mercadopago']['link'] ?? null,
+            'is_active'           => 1,
+            'account_rut'         => $user['rut'] ?? '',
+            'bank_name'           => $data['transfer']['bank'] ?? ($existing['bank_name'] ?? ''),
+            'account_type'        => $data['transfer']['account_type'] ?? ($existing['account_type'] ?? 'cuenta_corriente'),
+            'account_number'      => $data['transfer']['account_number'] ?? ($existing['account_number'] ?? ''),
+            'account_name'        => $data['transfer']['account_name'] ?? ($existing['account_name'] ?? ''),
+            'is_active'           => !empty($data['transfer']['enabled']) ? 1 : ($existing['is_active'] ?? 0),
+            'wallet_enabled'      => !empty($data['wallet']['enabled']) ? 1 : 0,
+            'wallet_provider'     => $data['wallet']['provider'] ?? null,
+            'wallet_account'      => $data['wallet']['account'] ?? null,
+            'wallet_instructions' => $data['wallet']['instructions'] ?? null,
+            'custom_enabled'      => !empty($data['custom']['enabled']) ? 1 : 0,
+            'custom_text'         => $data['custom']['text'] ?? null,
+        ];
+
+        if ($existing) {
+            $db->update('vendor_bank_accounts', $record, 'vendor_id=?', [Auth::id()]);
+        } else {
+            $db->insert('vendor_bank_accounts', $record);
+        }
+        Response::json(['message' => 'Métodos de pago guardados.']);
+    }
+
+    public function getVendorPaymentMethods(Request $req): void
+    {
+        $vendorId = (int)$req->param('vendor_id');
+        $acc = DB::getInstance()->fetch(
+            "SELECT mp_enabled, mp_link, is_active AS transfer_enabled,
+                    bank_name, account_type, account_number, account_name,
+                    wallet_enabled, wallet_provider, wallet_account, wallet_instructions,
+                    custom_enabled, custom_text
+             FROM vendor_bank_accounts WHERE vendor_id=?",
+            [$vendorId]
+        );
+        if (!$acc) Response::json(['methods' => []]);
+        $methods = [];
+        if (!empty($acc['mp_enabled'])) {
+            $methods[] = [
+                'key'   => 'mercadopago',
+                'label' => 'Mercado Pago',
+                'desc'  => 'Tarjeta de crédito, débito, cuotas',
+                'icon'  => 'bi-credit-card',
+                'color' => '#009ee3',
+                'link'  => $acc['mp_link'] ?: 'https://link.mercadopago.cl/mercadosordo',
+                'recommended' => true,
+            ];
+        }
+        if (!empty($acc['transfer_enabled']) && $acc['bank_name']) {
+            $types = ['cuenta_corriente'=>'Cta. Corriente','cuenta_ahorro'=>'Cta. Ahorro','cuenta_vista'=>'Cta. Vista','cuenta_rut'=>'Cta. RUT'];
+            $methods[] = [
+                'key'    => 'bank_transfer',
+                'label'  => 'Transferencia Bancaria',
+                'desc'   => $acc['bank_name'] . ' · ' . ($types[$acc['account_type']] ?? ''),
+                'icon'   => 'bi-bank2',
+                'color'  => '#198754',
+                'detail' => $acc['bank_name'] . ' · ' . ($types[$acc['account_type']] ?? '') . ' N° ' . $acc['account_number'] . ' · ' . $acc['account_name'],
+            ];
+        }
+        if (!empty($acc['wallet_enabled']) && $acc['wallet_provider']) {
+            $methods[] = [
+                'key'    => 'wallet',
+                'label'  => $acc['wallet_provider'],
+                'desc'   => $acc['wallet_account'] ?? 'Billetera digital',
+                'icon'   => 'bi-phone-fill',
+                'color'  => '#6f42c1',
+                'detail' => $acc['wallet_instructions'],
+            ];
+        }
+        if (!empty($acc['custom_enabled']) && $acc['custom_text']) {
+            $methods[] = [
+                'key'    => 'custom',
+                'label'  => 'Otro método',
+                'desc'   => substr($acc['custom_text'], 0, 60) . (strlen($acc['custom_text']) > 60 ? '...' : ''),
+                'icon'   => 'bi-chat-text-fill',
+                'color'  => '#fd7e14',
+                'detail' => $acc['custom_text'],
+            ];
+        }
+        Response::json(['methods' => $methods]);
     }
 
     public function createPayment(Request $req): void

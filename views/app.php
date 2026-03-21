@@ -2163,10 +2163,9 @@
               <!-- Métodos del vendedor disponibles -->
               <div v-if="!checkoutOrderId" class="mb-4">
                 <div v-if="vendorPaymentMethods.length === 0"
-                     class="alert alert-warning small">
-                  <i class="bi bi-exclamation-triangle me-1"></i>
-                  El vendedor no tiene métodos de pago configurados aún.
-                  Contacta al vendedor directamente.
+                     class="alert alert-info small">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Cargando métodos de pago...
                 </div>
                 <div v-else class="d-flex flex-column gap-2">
                   <div v-for="method in vendorPaymentMethods" :key="method.key"
@@ -3094,55 +3093,75 @@ const app = createApp({
       return list;
     }
 
-    function savePaymentMethods() {
+    async function savePaymentMethods() {
       profileLoading.value = true;
-      const key = 'ms_pm_' + (auth.value.user?.id || 'guest');
-      localStorage.setItem(key, JSON.stringify(paymentMethods.value));
-      setTimeout(() => {
-        profileLoading.value   = false;
+      try {
+        await api('POST', '/vendor/payment-methods/save', paymentMethods.value);
         paymentMethodsSaved.value = true;
         setTimeout(() => paymentMethodsSaved.value = false, 3000);
         toast('Métodos de pago guardados ✓');
-      }, 400);
+      } catch (e) {
+        toast(e.error || 'Error al guardar.', 'error');
+      } finally {
+        profileLoading.value = false;
+      }
     }
 
-    function loadPaymentMethods() {
-      const key   = 'ms_pm_' + (auth.value.user?.id || 'guest');
-      const saved = localStorage.getItem(key);
-      if (saved) {
-        try { paymentMethods.value = { ...paymentMethods.value, ...JSON.parse(saved) }; } catch {}
-      }
+    async function loadPaymentMethods() {
+      try {
+        const r = await api('GET', '/vendor/bank/status');
+        if (r.connected && r.account) {
+          const a = r.account;
+          paymentMethods.value = {
+            mercadopago: { enabled: !!a.mp_enabled,      link: a.mp_link || 'https://link.mercadopago.cl/mercadosordo' },
+            wallet:      { enabled: !!a.wallet_enabled,  provider: a.wallet_provider || '', account: a.wallet_account || '', instructions: a.wallet_instructions || '' },
+            transfer:    { enabled: !!a.is_active,       bank: a.bank_name || '', account_type: a.account_type || 'cuenta_corriente', account_number: a.account_number || '', account_name: a.account_name || '' },
+            custom:      { enabled: !!a.custom_enabled,  text: a.custom_text || '' },
+          };
+        }
+      } catch {}
     }
 
     // Cargar métodos del vendedor de los items del carrito
-    function loadVendorPaymentMethods() {
-      if (!cart.value.items?.length) { vendorPaymentMethods.value = []; return; }
-      // Obtener seller_id del primer item
-      const sellerId = cart.value.items[0]?.seller_id;
-      if (!sellerId) { vendorPaymentMethods.value = []; return; }
-      const key   = 'ms_pm_' + sellerId;
-      const saved = localStorage.getItem(key);
-      if (saved) {
-        try {
-          const methods = JSON.parse(saved);
-          vendorPaymentMethods.value = buildVendorMethods(methods);
-          // Preseleccionar el primero si hay métodos
-          if (vendorPaymentMethods.value.length > 0 && !selectedPayMethod.value) {
-            selectedPayMethod.value = vendorPaymentMethods.value[0].key;
-            selectedPayDetails.value = vendorPaymentMethods.value[0];
-          }
-          return;
-        } catch {}
-      }
-      // Si el vendedor no tiene métodos configurados, mostrar MP por defecto
-      vendorPaymentMethods.value = [{
+    async function loadVendorPaymentMethods() {
+      const defaultMP = [{
         key: 'mercadopago', label: 'Mercado Pago',
         desc: 'Tarjeta de crédito, débito, cuotas',
         icon: 'bi-credit-card', color: '#009ee3',
         link: 'https://link.mercadopago.cl/mercadosordo',
         recommended: true,
       }];
-      selectedPayMethod.value  = 'mercadopago';
+
+      if (!cart.value.items?.length) {
+        vendorPaymentMethods.value = defaultMP;
+        selectedPayMethod.value    = 'mercadopago';
+        selectedPayDetails.value   = defaultMP[0];
+        return;
+      }
+
+      const sellerId = cart.value.items[0]?.seller_id;
+      if (!sellerId) {
+        vendorPaymentMethods.value = defaultMP;
+        selectedPayMethod.value    = 'mercadopago';
+        selectedPayDetails.value   = defaultMP[0];
+        return;
+      }
+
+      try {
+        const r = await fetch(`/api/vendor/${sellerId}/payment-methods`);
+        const data = await r.json();
+        if (data.methods && data.methods.length > 0) {
+          vendorPaymentMethods.value = data.methods;
+          selectedPayMethod.value    = data.methods[0].key;
+          selectedPayDetails.value   = data.methods[0];
+          return;
+        }
+      } catch {}
+
+      // Fallback MP
+      vendorPaymentMethods.value = defaultMP;
+      selectedPayMethod.value    = 'mercadopago';
+      selectedPayDetails.value   = defaultMP[0];
     }
 
     const notifPrefs = ref([
@@ -3430,15 +3449,9 @@ const app = createApp({
         if (!currentOrderId) throw { error: 'No se pudo crear la orden.' };
 
         if (selectedPayMethod.value === 'mercadopago') {
-          // Intentar crear preferencia API, sino usar link directo
-          try {
-            const mpRes = await api('POST', '/payments/mercadopago/create', { order_id: currentOrderId });
-            mpInitPoint.value = mpRes.init_point;
-          } catch {
-            // Fallback al link directo del vendedor
-            const vendorLink = selectedPayDetails.value?.link || 'https://link.mercadopago.cl/mercadosordo';
-            mpInitPoint.value = vendorLink;
-          }
+          // Usar link directo del vendedor (sin API MP)
+          const vendorLink = selectedPayDetails.value?.link || 'https://link.mercadopago.cl/mercadosordo';
+          mpInitPoint.value = vendorLink;
         } else if (selectedPayMethod.value === 'bank_transfer') {
           try {
             const bankRes = await api('POST', '/payments/bank-transfer/create', { order_id: currentOrderId });

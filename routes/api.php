@@ -26,6 +26,9 @@ $router->group(['prefix' => '/api'], function (Router $r) {
     $r->get('/products/{slug}',    'MercadoSordo\Controllers\ProductController@show');
     $r->get('/categories',         'MercadoSordo\Controllers\AdminController@categories');
 
+    // ── Métodos de pago del vendedor — público ─────────────────────────────
+    $r->get('/vendor/{vendor_id}/payment-methods', 'MercadoSordo\Controllers\BankTransferController@getVendorPaymentMethods');
+
     // ── Carrito — guest + auth ────────────────────────────────────────────
     $r->get('/cart',               'MercadoSordo\Controllers\CartController@index');
     $r->post('/cart/items',        'MercadoSordo\Controllers\CartController@addItem');
@@ -65,7 +68,8 @@ $router->group(['prefix' => '/api'], function (Router $r) {
 
         // Pagos — Transferencia Bancaria
         $r->get('/vendor/bank/status',            'MercadoSordo\Controllers\BankTransferController@bankAccountStatus');
-        $r->post('/vendor/bank-account/connect',  'MercadoSordo\Controllers\BankTransferController@connectBankAccount');
+        $r->post('/vendor/bank-account/connect',   'MercadoSordo\Controllers\BankTransferController@connectBankAccount');
+        $r->post('/vendor/payment-methods/save',    'MercadoSordo\Controllers\BankTransferController@savePaymentMethods');
         $r->post('/payments/bank-transfer/create','MercadoSordo\Controllers\BankTransferController@createPayment');
 
         // Reseñas
