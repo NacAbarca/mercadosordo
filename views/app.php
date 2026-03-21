@@ -315,6 +315,30 @@
     }
     [v-cloak] { display: none; }
 
+  /* ─── FOOTER ─── */
+  .ms-footer {
+    background: var(--ms-text);
+    color: rgba(255,255,255,.5);
+    text-align: center;
+    padding: 14px 16px;
+    font-size: .78rem;
+    font-family: 'Nunito', sans-serif;
+    letter-spacing: .3px;
+    margin-top: auto;
+  }
+  .ms-footer a {
+    color: var(--ms-yellow);
+    text-decoration: none;
+    font-weight: 700;
+  }
+  .ms-footer a:hover { text-decoration: underline; }
+  body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  #app { flex: 1; display: flex; flex-direction: column; }
+
     @media (max-width: 768px) {
       .admin-sidebar { display: none; }
       .search-bar input { font-size: .85rem; }
@@ -4288,5 +4312,14 @@ const app = createApp({
 
 app.mount('#app');
 </script>
+  <!-- FOOTER -->
+  <footer class="ms-footer" v-if="!isAdminRoute">
+    <span>© 2026 <strong style="color:rgba(255,255,255,.8)">MercadoSordo</strong></span>
+    <span class="mx-2">·</span>
+    <span>Developed by <a href="https://github.com/NacAbarca" target="_blank">Nac Abarca</a></span>
+    <span class="mx-2">·</span>
+    <span>PHP 8.2 · Vue 3 · Bootstrap 5</span>
+  </footer>
+
 </body>
 </html>
