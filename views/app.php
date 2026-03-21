@@ -90,6 +90,47 @@
       transition: background .15s;
     }
     .navbar-actions a:hover, .navbar-actions button:hover { background: rgba(255,255,255,.12); }
+
+    /* ─── DROPDOWN MENÚ ─── */
+    .navbar-ms .dropdown-menu {
+      background: var(--ms-blue-dark);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.25);
+      min-width: 220px;
+      padding: 8px;
+      margin-top: 8px !important;
+    }
+    .navbar-ms .dropdown-menu .dropdown-item {
+      color: rgba(255,255,255,.85);
+      border-radius: 6px;
+      padding: 9px 14px;
+      font-size: .88rem;
+      font-weight: 600;
+      transition: background .15s;
+    }
+    .navbar-ms .dropdown-menu .dropdown-item:hover {
+      background: rgba(255,255,255,.12);
+      color: var(--ms-yellow);
+    }
+    .navbar-ms .dropdown-menu .dropdown-item.text-danger {
+      color: #ff6b6b !important;
+    }
+    .navbar-ms .dropdown-menu .dropdown-item.text-danger:hover {
+      background: rgba(255,107,107,.15);
+      color: #ff6b6b !important;
+    }
+    .navbar-ms .dropdown-menu .dropdown-divider {
+      border-color: rgba(255,255,255,.15);
+      margin: 6px 0;
+    }
+    /* Header del dropdown con nombre de usuario */
+    .navbar-ms .dropdown-menu .dropdown-header {
+      color: var(--ms-yellow);
+      font-weight: 800;
+      font-size: .85rem;
+      padding: 6px 14px;
+    }
     .navbar-actions i { font-size: 1.3rem; }
     .cart-badge {
       background: var(--ms-blue); color: white;
@@ -388,6 +429,8 @@
               <span>{{ auth.user.name.split(' ')[0] }}</span>
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
+              <li><h6 class="dropdown-header"><i class="bi bi-person-circle me-2"></i>{{ auth.user?.name }}</h6></li>
+              <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('profile')"><i class="bi bi-person me-2"></i>Mi perfil</a></li>
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('orders')"><i class="bi bi-box me-2"></i>Mis compras</a></li>
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('my-products')"><i class="bi bi-grid me-2"></i>Mis ventas</a></li>
