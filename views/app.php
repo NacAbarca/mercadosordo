@@ -366,12 +366,19 @@
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('profile')"><i class="bi bi-person me-2"></i>Mi perfil</a></li>
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('orders')"><i class="bi bi-box me-2"></i>Mis compras</a></li>
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('my-products')"><i class="bi bi-grid me-2"></i>Mis ventas</a></li>
+              <li><a class="dropdown-item" href="#" @click.prevent="navigate('vendor-orders')"><i class="bi bi-bag-check me-2"></i>Mis pedidos <span class="badge bg-danger ms-1" v-if="vendorOrdersBadge>0">{{vendorOrdersBadge}}</span></a></li>
               <li v-if="auth.user.role === 'admin'"><a class="dropdown-item" href="#" @click.prevent="navigate('admin')"><i class="bi bi-shield me-2"></i>Admin Panel</a></li>
               <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item text-danger" href="#" @click.prevent="logout"><i class="bi bi-box-arrow-right me-2"></i>Salir</a></li>
             </ul>
           </div>
         </template>
+        <!-- Notificaciones -->
+        <a href="#" @click.prevent="navigate('notifications')" style="position:relative" v-if="auth.user">
+          <i class="bi bi-bell"></i>
+          <span>Avisos</span>
+          <span class="cart-badge" v-if="unreadCount>0" style="background:#e53935">{{unreadCount>9?'9+':unreadCount}}</span>
+        </a>
         <a href="#" @click.prevent="navigate('cart')" style="position:relative">
           <i class="bi bi-cart3"></i>
           <span>Carrito</span>
@@ -2343,6 +2350,346 @@
       </div>
     </template>
 
+
+    <!-- ─── MIS PEDIDOS (VENDEDOR) ─── -->
+    <template v-if="currentView === 'vendor-orders'">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h3 class="section-title mb-0"><i class="bi bi-bag-check me-2 text-primary"></i>Mis pedidos recibidos</h3>
+        <select class="form-select form-select-sm w-auto" v-model="vendorOrderFilter" @change="loadVendorOrders()">
+          <option value="">Todos los estados</option>
+          <option value="paid">Pagados — acción requerida</option>
+          <option value="processing">En proceso</option>
+          <option value="dispatched">Despachados</option>
+          <option value="completed">Completados</option>
+          <option value="dispute">En disputa</option>
+          <option value="cancelled">Cancelados</option>
+        </select>
+      </div>
+
+      <!-- Detalle de orden -->
+      <div v-if="selectedVendorOrder">
+        <button class="btn btn-outline-secondary btn-sm mb-3" @click="selectedVendorOrder=null">
+          <i class="bi bi-arrow-left me-1"></i>Volver a mis pedidos
+        </button>
+        <div class="row g-4">
+          <!-- Info orden + protocolo -->
+          <div class="col-md-8">
+            <!-- Header orden -->
+            <div class="bg-white rounded shadow-sm p-4 mb-3">
+              <div class="d-flex justify-content-between align-items-start mb-3">
+                <div>
+                  <h5 class="fw-bold mb-1">{{selectedVendorOrder.order_number}}</h5>
+                  <div class="text-muted small">{{formatDate(selectedVendorOrder.created_at)}}</div>
+                </div>
+                <span class="badge fs-6" :class="statusBadge(selectedVendorOrder.status)">
+                  {{statusLabel(selectedVendorOrder.status)}}
+                </span>
+              </div>
+              <!-- Datos comprador -->
+              <div class="bg-light rounded p-3 mb-3">
+                <div class="fw-bold small text-muted mb-2"><i class="bi bi-person me-1"></i>COMPRADOR</div>
+                <div class="fw-bold">{{selectedVendorOrder.buyer_name}}</div>
+                <div class="text-muted small">{{selectedVendorOrder.buyer_email}}</div>
+                <div class="text-muted small" v-if="selectedVendorOrder.buyer_rut">RUT: {{selectedVendorOrder.buyer_rut}}</div>
+                <div class="text-muted small" v-if="selectedVendorOrder.buyer_phone">Tel: {{selectedVendorOrder.buyer_phone}}</div>
+              </div>
+              <!-- Dirección -->
+              <div class="bg-light rounded p-3 mb-3" v-if="selectedVendorOrder.address_snapshot">
+                <div class="fw-bold small text-muted mb-2"><i class="bi bi-geo-alt me-1"></i>DIRECCIÓN DE ENTREGA</div>
+                <div class="fw-bold">{{JSON.parse(selectedVendorOrder.address_snapshot).full_name}}</div>
+                <div class="text-muted small">{{JSON.parse(selectedVendorOrder.address_snapshot).address}}</div>
+                <div class="text-muted small">{{JSON.parse(selectedVendorOrder.address_snapshot).city}}, {{JSON.parse(selectedVendorOrder.address_snapshot).region}}</div>
+              </div>
+              <!-- Productos -->
+              <h6 class="fw-bold mb-2">Productos</h6>
+              <div v-for="item in selectedVendorOrder.items" :key="item.id"
+                   class="d-flex gap-3 align-items-center py-2 border-bottom">
+                <img :src="item.image||'/uploads/no-image.png'" style="width:56px;height:56px;object-fit:contain;background:#f8f8f8" class="rounded border">
+                <div class="flex-grow-1">
+                  <div class="fw-bold small">{{item.title}}</div>
+                  <div class="text-muted small">SKU: {{item.sku||'—'}} · Cant: {{item.quantity}}</div>
+                </div>
+                <div class="text-end">
+                  <div class="fw-bold">{{formatCLP(item.subtotal)}}</div>
+                  <div class="text-muted small">{{formatCLP(item.price)}} c/u</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── PROTOCOLO DE SEGURIDAD ── -->
+            <div class="bg-white rounded shadow-sm p-4 mb-3">
+              <h6 class="fw-bold mb-3"><i class="bi bi-shield-check me-2 text-primary"></i>Protocolo de seguridad</h6>
+              <div class="d-flex flex-column gap-3">
+                <!-- Paso 1 -->
+                <div class="d-flex gap-3 align-items-start p-3 rounded"
+                     :class="getProtocolStepClass(1, selectedVendorOrder.status)">
+                  <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 fw-bold"
+                       style="width:36px;height:36px;font-size:.9rem"
+                       :class="isStepDone(1,selectedVendorOrder.status)?'bg-success text-white':'bg-light text-muted border'">
+                    <i class="bi bi-check-lg" v-if="isStepDone(1,selectedVendorOrder.status)"></i>
+                    <span v-else>1</span>
+                  </div>
+                  <div class="flex-grow-1">
+                    <div class="fw-bold small">Aceptar orden</div>
+                    <div class="text-muted" style="font-size:.78rem">Confirmas que tienes el producto disponible</div>
+                    <div v-if="selectedVendorOrder.status==='paid'" class="mt-2">
+                      <button class="btn btn-success btn-sm fw-bold px-3" @click="vendorAcceptOrder(selectedVendorOrder.id)" :disabled="orderActionLoading">
+                        <span v-if="orderActionLoading" class="spinner-border spinner-border-sm me-1"></span>
+                        <i class="bi bi-check-circle me-1" v-else></i>Aceptar pedido
+                      </button>
+                    </div>
+                  </div>
+                  <span class="badge bg-success" v-if="isStepDone(1,selectedVendorOrder.status)">✓ Aceptado</span>
+                </div>
+                <!-- Paso 2 -->
+                <div class="d-flex gap-3 align-items-start p-3 rounded"
+                     :class="getProtocolStepClass(2, selectedVendorOrder.status)">
+                  <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 fw-bold"
+                       style="width:36px;height:36px;font-size:.9rem"
+                       :class="isStepDone(2,selectedVendorOrder.status)?'bg-success text-white':'bg-light text-muted border'">
+                    <i class="bi bi-check-lg" v-if="isStepDone(2,selectedVendorOrder.status)"></i>
+                    <span v-else>2</span>
+                  </div>
+                  <div class="flex-grow-1">
+                    <div class="fw-bold small">Confirmar despacho</div>
+                    <div class="text-muted" style="font-size:.78rem">Ingresa número de seguimiento del envío</div>
+                    <div v-if="selectedVendorOrder.status==='processing'" class="mt-2">
+                      <div class="row g-2 mb-2">
+                        <div class="col-md-6">
+                          <select class="form-select form-select-sm" v-model="dispatchForm.carrier">
+                            <option>Correos de Chile</option>
+                            <option>Starken</option>
+                            <option>Chilexpress</option>
+                            <option>Blue Express</option>
+                            <option>Shippify</option>
+                            <option>Retiro en tienda</option>
+                          </select>
+                        </div>
+                        <div class="col-md-6">
+                          <input type="text" class="form-control form-control-sm" v-model="dispatchForm.tracking" placeholder="Nº seguimiento (opcional)">
+                        </div>
+                      </div>
+                      <button class="btn btn-primary btn-sm fw-bold px-3" @click="vendorDispatchOrder(selectedVendorOrder.id)" :disabled="orderActionLoading">
+                        <i class="bi bi-truck me-1"></i>Confirmar despacho
+                      </button>
+                    </div>
+                    <div class="text-muted small mt-1" v-if="selectedVendorOrder.tracking_number">
+                      <i class="bi bi-truck me-1"></i>{{selectedVendorOrder.tracking_carrier}} · {{selectedVendorOrder.tracking_number}}
+                    </div>
+                  </div>
+                  <span class="badge bg-success" v-if="isStepDone(2,selectedVendorOrder.status)">✓ Despachado</span>
+                </div>
+                <!-- Paso 3 -->
+                <div class="d-flex gap-3 align-items-start p-3 rounded"
+                     :class="getProtocolStepClass(3, selectedVendorOrder.status)">
+                  <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 fw-bold"
+                       style="width:36px;height:36px;font-size:.9rem"
+                       :class="isStepDone(3,selectedVendorOrder.status)?'bg-success text-white':'bg-light text-muted border'">
+                    <i class="bi bi-check-lg" v-if="isStepDone(3,selectedVendorOrder.status)"></i>
+                    <span v-else>3</span>
+                  </div>
+                  <div class="flex-grow-1">
+                    <div class="fw-bold small">Comprador confirma recepción</div>
+                    <div class="text-muted" style="font-size:.78rem">
+                      El comprador confirma que recibió el pedido. Auto-confirma en 7 días.
+                      <span v-if="selectedVendorOrder.auto_complete_at"> · Fecha límite: {{formatDate(selectedVendorOrder.auto_complete_at)}}</span>
+                    </div>
+                  </div>
+                  <span class="badge bg-success" v-if="isStepDone(3,selectedVendorOrder.status)">✓ Recibido</span>
+                  <span class="badge bg-warning text-dark" v-else-if="['dispatched','in_transit'].includes(selectedVendorOrder.status)">Esperando</span>
+                </div>
+                <!-- Paso 4 -->
+                <div class="d-flex gap-3 align-items-start p-3 rounded"
+                     :class="selectedVendorOrder.status==='completed'?'bg-success bg-opacity-10 border-success border':'bg-light'">
+                  <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+                       style="width:36px;height:36px"
+                       :class="selectedVendorOrder.status==='completed'?'bg-success text-white':'bg-light text-muted border'">
+                    <i class="bi bi-cash-coin" v-if="selectedVendorOrder.status==='completed'"></i>
+                    <span v-else class="fw-bold" style="font-size:.9rem">4</span>
+                  </div>
+                  <div>
+                    <div class="fw-bold small">Fondos liberados</div>
+                    <div class="text-muted" style="font-size:.78rem">
+                      Recibes {{formatCLP(selectedVendorOrder.financials?.vendor_net)}} neto en tu cuenta
+                    </div>
+                  </div>
+                  <span class="badge bg-success ms-auto" v-if="selectedVendorOrder.status==='completed'">✓ Completado</span>
+                </div>
+              </div>
+
+              <!-- Cancelar orden -->
+              <div class="mt-3 pt-3 border-top" v-if="!['completed','cancelled','refunded'].includes(selectedVendorOrder.status)">
+                <button class="btn btn-outline-danger btn-sm" @click="showCancelOrder=true">
+                  <i class="bi bi-x-circle me-1"></i>Cancelar orden
+                </button>
+              </div>
+            </div>
+
+            <!-- Chat -->
+            <div class="bg-white rounded shadow-sm p-4">
+              <h6 class="fw-bold mb-3"><i class="bi bi-chat-dots me-2 text-primary"></i>Chat con el comprador</h6>
+              <div class="d-flex flex-column gap-2 mb-3" style="max-height:300px;overflow-y:auto" id="chatBox">
+                <div v-if="orderMessages.length===0" class="text-center text-muted small py-3">
+                  Sin mensajes aún. Inicia la conversación.
+                </div>
+                <div v-for="msg in orderMessages" :key="msg.id"
+                     class="d-flex gap-2" :class="msg.sender_id==auth.user?.id?'flex-row-reverse':''">
+                  <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center flex-shrink-0"
+                       style="width:32px;height:32px;color:white;font-size:.8rem">
+                    {{msg.sender_name?.charAt(0)}}
+                  </div>
+                  <div class="p-2 rounded" style="max-width:70%"
+                       :class="msg.sender_id==auth.user?.id?'bg-primary text-white':'bg-light'">
+                    <div style="font-size:.85rem">{{msg.message}}</div>
+                    <div style="font-size:.7rem;opacity:.7">{{formatDate(msg.created_at)}}</div>
+                  </div>
+                </div>
+              </div>
+              <div class="d-flex gap-2">
+                <input type="text" class="form-control" v-model="chatMessage"
+                       placeholder="Escribe un mensaje..." @keyup.enter="sendOrderMessage(selectedVendorOrder.id)">
+                <button class="btn btn-primary" @click="sendOrderMessage(selectedVendorOrder.id)" :disabled="!chatMessage.trim()">
+                  <i class="bi bi-send-fill"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sidebar financiero -->
+          <div class="col-md-4">
+            <div class="bg-white rounded shadow-sm p-4 sticky-top" style="top:80px">
+              <h6 class="fw-bold mb-3"><i class="bi bi-calculator me-2 text-primary"></i>Desglose financiero</h6>
+              <div v-if="selectedVendorOrder.financials">
+                <div class="d-flex justify-content-between mb-2 small">
+                  <span class="text-muted">Precio de venta</span>
+                  <span class="fw-bold">{{formatCLP(selectedVendorOrder.total)}}</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2 small text-muted">
+                  <span>IVA incluido (19%)</span>
+                  <span>{{formatCLP(selectedVendorOrder.financials.iva_amount)}}</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2 small text-muted">
+                  <span>Subtotal neto</span>
+                  <span>{{formatCLP(selectedVendorOrder.financials.subtotal_neto)}}</span>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between mb-2 small text-danger">
+                  <span>Comisión MercadoSordo (5%)</span>
+                  <span>- {{formatCLP(selectedVendorOrder.financials.commission_amount)}}</span>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between fw-bold">
+                  <span>Recibes tú</span>
+                  <span class="text-success fs-5">{{formatCLP(selectedVendorOrder.financials.vendor_net)}}</span>
+                </div>
+                <div class="mt-3 p-2 bg-light rounded small text-muted text-center">
+                  IVA 19% incluido en el precio de venta
+                </div>
+              </div>
+              <!-- Tracking -->
+              <div class="mt-4" v-if="selectedVendorOrder.tracking?.length">
+                <h6 class="fw-bold mb-2 small text-muted">HISTORIAL</h6>
+                <div v-for="t in selectedVendorOrder.tracking" :key="t.id" class="d-flex gap-2 mb-2 small">
+                  <i class="bi bi-circle-fill text-primary mt-1 flex-shrink-0" style="font-size:.5rem"></i>
+                  <div>
+                    <div class="fw-bold">{{statusLabel(t.status)}}</div>
+                    <div class="text-muted">{{t.description}}</div>
+                    <div class="text-muted" style="font-size:.7rem">{{formatDate(t.created_at)}}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal cancelar -->
+        <div v-if="showCancelOrder" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9001;display:flex;align-items:center;justify-content:center;padding:1rem">
+          <div class="bg-white rounded p-4 shadow" style="max-width:400px;width:100%">
+            <h5 class="fw-bold text-danger mb-3"><i class="bi bi-x-circle me-2"></i>Cancelar orden</h5>
+            <p class="text-muted small mb-3">¿Seguro que deseas cancelar la orden <strong>{{selectedVendorOrder.order_number}}</strong>? Se restaurará el stock.</p>
+            <textarea class="form-control mb-3" rows="2" v-model="cancelReason" placeholder="Motivo de cancelación..."></textarea>
+            <div class="d-flex gap-2">
+              <button class="btn btn-outline-secondary" @click="showCancelOrder=false">Volver</button>
+              <button class="btn btn-danger fw-bold" @click="doCancelOrder(selectedVendorOrder.id)">
+                Sí, cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lista de pedidos -->
+      <div v-else>
+        <div v-if="vendorOrdersLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+        <div v-else>
+          <div v-if="vendorOrders.length===0" class="text-center py-5 bg-white rounded shadow-sm">
+            <i class="bi bi-bag" style="font-size:3rem;color:#ccc"></i>
+            <p class="mt-3 fw-bold">Sin pedidos aún</p>
+            <p class="text-muted small">Cuando alguien compre tus productos aparecerán aquí.</p>
+          </div>
+          <div v-for="o in vendorOrders" :key="o.id"
+               class="bg-white rounded shadow-sm p-4 mb-3"
+               style="cursor:pointer;transition:box-shadow .15s"
+               @mouseenter="$event.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,.12)'"
+               @mouseleave="$event.currentTarget.style.boxShadow=''"
+               @click="loadVendorOrderDetail(o.id)">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <div>
+                <div class="fw-bold">{{o.order_number}}</div>
+                <div class="text-muted small">{{formatDate(o.created_at)}} · {{o.items_count}} producto(s)</div>
+                <div class="text-muted small"><i class="bi bi-person me-1"></i>{{o.buyer_name}}</div>
+              </div>
+              <div class="text-end">
+                <span class="badge mb-1 d-block" :class="statusBadge(o.status)">{{statusLabel(o.status)}}</span>
+                <div class="fw-bold text-primary">{{formatCLP(o.total)}}</div>
+              </div>
+            </div>
+            <!-- Alerta acción requerida -->
+            <div class="alert alert-warning py-1 px-2 mb-0 small" v-if="o.status==='paid'">
+              <i class="bi bi-exclamation-triangle me-1"></i>
+              Acción requerida — acepta o cancela este pedido
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- ─── NOTIFICACIONES ─── -->
+    <template v-if="currentView === 'notifications'">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="section-title mb-0"><i class="bi bi-bell me-2 text-primary"></i>Centro de notificaciones
+          <span class="badge bg-danger ms-2" v-if="unreadCount>0">{{unreadCount}}</span>
+        </h3>
+        <button class="btn btn-outline-secondary btn-sm" @click="markAllNotifRead" v-if="unreadCount>0">
+          <i class="bi bi-check2-all me-1"></i>Marcar todas como leídas
+        </button>
+      </div>
+      <div v-if="notifsLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+      <div v-else>
+        <div v-if="notifications.length===0" class="text-center py-5 bg-white rounded shadow-sm">
+          <i class="bi bi-bell-slash" style="font-size:3rem;color:#ccc"></i>
+          <p class="mt-3 text-muted">Sin notificaciones</p>
+        </div>
+        <div v-for="n in notifications" :key="n.id"
+             class="bg-white rounded shadow-sm p-3 mb-2 d-flex gap-3 align-items-start"
+             :class="!n.read_at?'border-start border-primary border-3':''"
+             style="cursor:pointer"
+             @click="readNotif(n)">
+          <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+               style="width:40px;height:40px"
+               :class="'bg-'+n.color+' bg-opacity-10'">
+            <i :class="'bi '+n.icon+' text-'+n.color" style="font-size:1.1rem"></i>
+          </div>
+          <div class="flex-grow-1">
+            <div class="fw-bold small" :class="!n.read_at?'':'text-muted'">{{n.title}}</div>
+            <div class="text-muted small">{{n.body}}</div>
+            <div class="text-muted" style="font-size:.72rem">{{formatDate(n.created_at)}}</div>
+          </div>
+          <div class="rounded-circle bg-primary flex-shrink-0" style="width:8px;height:8px;margin-top:6px" v-if="!n.read_at"></div>
+        </div>
+      </div>
+    </template>
+
   <!-- ─── CART VIEW ─── -->
   <div class="container py-4" v-if="currentView === 'cart'">
     <h2 class="section-title mb-4">Tu carrito ({{ cart.count }})</h2>
@@ -3500,6 +3847,145 @@ const app = createApp({
       }
     }
 
+    // ── Gestión de órdenes vendedor ────────────────────────────────────────
+    const vendorOrders       = ref([]);
+    const vendorOrdersLoading = ref(false);
+    const vendorOrderFilter  = ref('');
+    const selectedVendorOrder = ref(null);
+    const vendorOrdersBadge  = ref(0);
+    const orderActionLoading = ref(false);
+    const dispatchForm       = ref({ carrier: 'Correos de Chile', tracking: '' });
+    const showCancelOrder    = ref(false);
+    const cancelReason       = ref('');
+    const orderMessages      = ref([]);
+    const chatMessage        = ref('');
+
+    // ── Notificaciones ──────────────────────────────────────────────────
+    const notifications  = ref([]);
+    const unreadCount    = ref(0);
+    const notifsLoading  = ref(false);
+
+    // Helpers protocolo
+    const protocolSteps = {
+      paid: 1, processing: 2, dispatched: 3,
+      in_transit: 3, delivered: 3, completed: 4
+    };
+    function isStepDone(step, status) {
+      return (protocolSteps[status] || 0) >= step;
+    }
+    function getProtocolStepClass(step, status) {
+      const cur = protocolSteps[status] || 0;
+      if (cur >= step) return 'bg-success bg-opacity-10 border border-success rounded';
+      if (cur === step - 1) return 'border border-primary rounded';
+      return 'bg-light rounded';
+    }
+
+    async function loadVendorOrders() {
+      vendorOrdersLoading.value = true;
+      try {
+        const r = await api('GET', `/vendor/orders${vendorOrderFilter.value ? '?status=' + vendorOrderFilter.value : ''}`);
+        vendorOrders.value      = r.data || [];
+        vendorOrdersBadge.value = vendorOrders.value.filter(o => o.status === 'paid').length;
+      } catch {}
+      finally { vendorOrdersLoading.value = false; }
+    }
+
+    async function loadVendorOrderDetail(id) {
+      try {
+        selectedVendorOrder.value = await api('GET', `/vendor/orders/${id}`);
+        orderMessages.value = selectedVendorOrder.value.messages || [];
+        window.scrollTo(0, 0);
+      } catch { toast('Error al cargar pedido.', 'error'); }
+    }
+
+    async function vendorAcceptOrder(id) {
+      orderActionLoading.value = true;
+      try {
+        await api('POST', `/vendor/orders/${id}/accept`);
+        await loadVendorOrderDetail(id);
+        toast('✅ Orden aceptada. Comprador notificado.');
+      } catch (e) { toast(e.error || 'Error.', 'error'); }
+      finally { orderActionLoading.value = false; }
+    }
+
+    async function vendorDispatchOrder(id) {
+      orderActionLoading.value = true;
+      try {
+        await api('POST', `/vendor/orders/${id}/dispatch`, dispatchForm.value);
+        await loadVendorOrderDetail(id);
+        toast('🚚 Despacho confirmado. Comprador notificado.');
+        dispatchForm.value = { carrier: 'Correos de Chile', tracking: '' };
+      } catch (e) { toast(e.error || 'Error.', 'error'); }
+      finally { orderActionLoading.value = false; }
+    }
+
+    async function doCancelOrder(id) {
+      try {
+        await api('POST', `/vendor/orders/${id}/cancel`, { reason: cancelReason.value });
+        showCancelOrder.value = false;
+        cancelReason.value    = '';
+        selectedVendorOrder.value = null;
+        await loadVendorOrders();
+        toast('Orden cancelada.');
+      } catch (e) { toast(e.error || 'Error.', 'error'); }
+    }
+
+    async function sendOrderMessage(orderId) {
+      if (!chatMessage.value.trim()) return;
+      try {
+        const r = await api('POST', `/orders/${orderId}/messages`, { message: chatMessage.value });
+        orderMessages.value.push(r.message);
+        chatMessage.value = '';
+        setTimeout(() => {
+          const box = document.getElementById('chatBox');
+          if (box) box.scrollTop = box.scrollHeight;
+        }, 100);
+      } catch { toast('Error al enviar mensaje.', 'error'); }
+    }
+
+    // ── Notificaciones ────────────────────────────────────────────────────
+    async function loadNotifications() {
+      notifsLoading.value = true;
+      try {
+        const r = await api('GET', '/notifications');
+        notifications.value = r.data || [];
+        unreadCount.value   = r.unread_count || 0;
+      } catch {}
+      finally { notifsLoading.value = false; }
+    }
+
+    async function loadUnreadCount() {
+      try {
+        const r = await api('GET', '/notifications?unread=1');
+        unreadCount.value = r.unread_count || 0;
+      } catch {}
+    }
+
+    async function readNotif(notif) {
+      if (!notif.read_at) {
+        await api('PATCH', `/notifications/${notif.id}/read`).catch(() => {});
+        notif.read_at = new Date().toISOString();
+        unreadCount.value = Math.max(0, unreadCount.value - 1);
+      }
+      if (notif.action_url) navigate('orders');
+    }
+
+    async function markAllNotifRead() {
+      await api('POST', '/notifications/read-all').catch(() => {});
+      notifications.value.forEach(n => n.read_at = n.read_at || new Date().toISOString());
+      unreadCount.value = 0;
+      toast('Todas marcadas como leídas.');
+    }
+
+    // Comprador confirma recepción
+    async function confirmOrderReceived(orderId) {
+      try {
+        await api('POST', `/orders/${orderId}/confirm`);
+        toast('✅ Recepción confirmada. Fondos liberados al vendedor.');
+        await loadOrders();
+      } catch (e) { toast(e.error || 'Error.', 'error'); }
+    }
+
     const adminDash = ref({});
     const adminUsers = ref([]);
     const adminProducts = ref([]);
@@ -3552,7 +4038,9 @@ const app = createApp({
       if (view === 'products') loadProducts();
       if (view === 'cart') loadCart();
       if (view === 'orders') { selectedOrder.value = null; loadOrders(); }
-      if (view === 'my-products') { sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus(); }
+      if (view === 'my-products')    { sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus(); }
+      if (view === 'vendor-orders')  { selectedVendorOrder.value = null; loadVendorOrders(); }
+      if (view === 'notifications')  { loadNotifications(); }
       if (view === 'profile')  { profileTab.value = 'data'; initProfileData(); loadAddresses(); loadPaymentMethods(); }
       if (view === 'checkout') { initCheckout(); loadAddresses(); }
       if (view === 'admin') { adminView.value = 'dashboard'; loadDashboard(); }
@@ -3743,6 +4231,7 @@ const app = createApp({
 
     onMounted(async () => {
       await Promise.all([loadMe(), loadCategories(), loadProducts(true), loadCart()]);
+      if (auth.value.user) loadUnreadCount();
     });
 
     return {
@@ -3779,6 +4268,14 @@ const app = createApp({
       confirmDeleteProduct, doDeleteProduct, getCategoryName,
       updateAdminUser, updateOrderStatus,
       formatCLP, formatDate, statusBadge, statusLabel,
+      vendorOrders, vendorOrdersLoading, vendorOrderFilter, selectedVendorOrder,
+      vendorOrdersBadge, orderActionLoading, dispatchForm, showCancelOrder, cancelReason,
+      orderMessages, chatMessage,
+      loadVendorOrders, loadVendorOrderDetail, vendorAcceptOrder,
+      vendorDispatchOrder, doCancelOrder, sendOrderMessage,
+      isStepDone, getProtocolStepClass, confirmOrderReceived,
+      notifications, unreadCount, notifsLoading,
+      loadNotifications, readNotif, markAllNotifRead,
       checkoutStep, checkoutLoading, checkoutError, checkoutOrderId, checkoutAmount,
       checkoutOrderNumber, mpInitPoint, bankPayUrl, selectedAddressId, selectedPayMethod,
       mpStatus, connectMercadoPago, disconnectMercadoPago,

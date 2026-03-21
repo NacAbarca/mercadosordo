@@ -430,15 +430,24 @@ class OrderController
         try {
             $subtotal    = array_sum(array_map(fn($i) => $i['price'] * $i['quantity'], $items));
             $orderNumber = 'MS-' . strtoupper(substr(uniqid(), -8));
+            $sellerId    = $items[0]['seller_id'] ?? null;
+            $ivaAmount   = round($subtotal - ($subtotal / 1.19), 2);
+            $commAmount  = round($subtotal * 0.05, 2);
+            $vendorNet   = round($subtotal - $commAmount, 2);
             $orderId     = $db->insert('orders', [
-                'order_number'    => $orderNumber,
-                'buyer_id'        => Auth::id(),
-                'status'          => 'pending',
-                'subtotal'        => $subtotal,
-                'shipping_cost'   => 0,
-                'total'           => $subtotal,
-                'payment_method'  => $data['payment_method'],
-                'address_snapshot'=> json_encode($addr),
+                'order_number'     => $orderNumber,
+                'buyer_id'         => Auth::id(),
+                'seller_id'        => $sellerId,
+                'status'           => 'pending',
+                'subtotal'         => $subtotal,
+                'shipping_cost'    => 0,
+                'total'            => $subtotal,
+                'subtotal_neto'    => round($subtotal / 1.19, 2),
+                'iva_amount'       => $ivaAmount,
+                'commission_amount'=> $commAmount,
+                'vendor_net'       => $vendorNet,
+                'payment_method'   => $data['payment_method'],
+                'address_snapshot' => json_encode($addr),
             ]);
             foreach ($items as $item) {
                 if ($item['stock'] < $item['quantity']) {
@@ -1280,6 +1289,274 @@ class BankTransferController
         $db->update('orders',['status'=>'paid','payment_id'=>$khipuId],'id=?',[$pay['order_id']]);
         $db->insert('order_tracking',['order_id'=>$pay['order_id'],'status'=>'paid','description'=>'Transferencia bancaria confirmada via Khipu. ID:'.$khipuId]);
         http_response_code(200);echo json_encode(['status'=>'ok']);exit;
+    }
+}
+
+// ============================================================
+// OrderManagementController — Panel vendedor + protocolo
+// ============================================================
+class OrderManagementController
+{
+    private const IVA_RATE        = 0.19;
+    private const COMMISSION_RATE = 0.05;
+    private const AUTO_COMPLETE_DAYS = 7;
+
+    // ── Calcular desglose financiero ───────────────────────
+    private function calcFinancials(float $total): array
+    {
+        $ivaAmount    = round($total - ($total / (1 + self::IVA_RATE)), 2);
+        $subtotalNeto = round($total - $ivaAmount, 2);
+        $commission   = round($total * self::COMMISSION_RATE, 2);
+        $vendorNet    = round($total - $commission, 2);
+        return [
+            'total'            => $total,
+            'iva_amount'       => $ivaAmount,
+            'subtotal_neto'    => $subtotalNeto,
+            'commission_amount'=> $commission,
+            'vendor_net'       => $vendorNet,
+            'iva_pct'          => self::IVA_RATE * 100,
+            'commission_pct'   => self::COMMISSION_RATE * 100,
+        ];
+    }
+
+    // ── Crear notificación ─────────────────────────────────
+    private function notify(DB $db, int $userId, string $type, string $title, string $body, string $icon = 'bi-bell', string $color = 'primary', string $entityType = null, int $entityId = null): void
+    {
+        $db->insert('notifications', [
+            'user_id'     => $userId,
+            'type'        => $type,
+            'title'       => $title,
+            'body'        => $body,
+            'icon'        => $icon,
+            'color'       => $color,
+            'entity_type' => $entityType,
+            'entity_id'   => $entityId,
+            'action_url'  => $entityType === 'order' ? '/orders/' . $entityId : null,
+        ]);
+    }
+
+    // ── VENDEDOR: mis pedidos recibidos ────────────────────
+    public function vendorOrders(Request $req): void
+    {
+        $db     = DB::getInstance();
+        $page   = (int)$req->input('page', 1);
+        $status = $req->input('status', '');
+        $sql    = "SELECT o.*,
+                    u.name AS buyer_name, u.email AS buyer_email, u.rut AS buyer_rut,
+                    (SELECT COUNT(*) FROM order_items WHERE order_id=o.id) AS items_count
+                   FROM orders o
+                   JOIN users u ON u.id = o.buyer_id
+                   WHERE o.seller_id = ?";
+        $bindings = [Auth::id()];
+        if ($status) { $sql .= " AND o.status = ?"; $bindings[] = $status; }
+        $sql .= " ORDER BY o.created_at DESC";
+        $result = $db->paginate($sql, $bindings, $page);
+        // Agregar desglose financiero a cada orden
+        foreach ($result['data'] as &$order) {
+            $fin = $this->calcFinancials((float)$order['total']);
+            $order['financials'] = $fin;
+            $order['items'] = $db->fetchAll(
+                "SELECT oi.*, pi.url AS image FROM order_items oi
+                 LEFT JOIN product_images pi ON pi.product_id=oi.product_id AND pi.is_primary=1
+                 WHERE oi.order_id=? AND oi.seller_id=?",
+                [$order['id'], Auth::id()]
+            );
+        }
+        Response::json($result);
+    }
+
+    // ── VENDEDOR: detalle de una orden ────────────────────
+    public function vendorOrderDetail(Request $req): void
+    {
+        $id = (int)$req->param('id');
+        $db = DB::getInstance();
+        $order = $db->fetch(
+            "SELECT o.*, u.name AS buyer_name, u.email AS buyer_email,
+                    u.rut AS buyer_rut, u.phone AS buyer_phone
+             FROM orders o JOIN users u ON u.id=o.buyer_id
+             WHERE o.id=? AND o.seller_id=?",
+            [$id, Auth::id()]
+        );
+        if (!$order) Response::json(['error' => 'Orden no encontrada.'], 404);
+        $order['items']         = $db->fetchAll("SELECT oi.*, pi.url AS image FROM order_items oi LEFT JOIN product_images pi ON pi.product_id=oi.product_id AND pi.is_primary=1 WHERE oi.order_id=? AND oi.seller_id=?", [$id, Auth::id()]);
+        $order['tracking']      = $db->fetchAll("SELECT * FROM order_tracking WHERE order_id=? ORDER BY created_at ASC", [$id]);
+        $order['confirmations'] = $db->fetchAll("SELECT oc.*, u.name AS confirmed_by_name FROM order_confirmations oc LEFT JOIN users u ON u.id=oc.confirmed_by WHERE oc.order_id=? ORDER BY oc.confirmed_at ASC", [$id]);
+        $order['messages']      = $db->fetchAll("SELECT om.*, u.name AS sender_name, u.avatar AS sender_avatar FROM order_messages om JOIN users u ON u.id=om.sender_id WHERE om.order_id=? ORDER BY om.created_at ASC", [$id]);
+        $order['financials']    = $this->calcFinancials((float)$order['total']);
+        $order['dispute']       = $db->fetch("SELECT * FROM order_disputes WHERE order_id=?", [$id]);
+        Response::json($order);
+    }
+
+    // ── PROTOCOLO PASO 1: Vendedor acepta orden ────────────
+    public function vendorAccept(Request $req): void
+    {
+        $id = (int)$req->param('id');
+        $db = DB::getInstance();
+        $order = $db->fetch("SELECT * FROM orders WHERE id=? AND seller_id=?", [$id, Auth::id()]);
+        if (!$order) Response::json(['error' => 'Orden no encontrada.'], 404);
+        if ($order['status'] !== 'paid') Response::json(['error' => 'Solo puedes aceptar órdenes pagadas.'], 400);
+        $db->beginTransaction();
+        try {
+            $db->update('orders', ['status' => 'processing', 'vendor_accepted_at' => date('Y-m-d H:i:s')], 'id=?', [$id]);
+            $db->insert('order_tracking', ['order_id' => $id, 'status' => 'processing', 'description' => 'Vendedor aceptó la orden. Preparando envío.']);
+            $db->insert('order_confirmations', ['order_id' => $id, 'step' => 'vendor_accept', 'confirmed_by' => Auth::id(), 'notes' => $req->input('notes')]);
+            $this->notify($db, (int)$order['buyer_id'], 'order_accepted', '✅ Vendedor aceptó tu orden', 'Tu orden ' . $order['order_number'] . ' está siendo preparada.', 'bi-bag-check', 'success', 'order', $id);
+            $db->commit();
+            Response::json(['message' => 'Orden aceptada. El comprador fue notificado.']);
+        } catch (\Throwable $e) { $db->rollback(); Response::json(['error' => 'Error al aceptar orden.'], 500); }
+    }
+
+    // ── PROTOCOLO PASO 2: Vendedor despacha ───────────────
+    public function vendorDispatch(Request $req): void
+    {
+        $id = (int)$req->param('id');
+        $db = DB::getInstance();
+        $order = $db->fetch("SELECT * FROM orders WHERE id=? AND seller_id=?", [$id, Auth::id()]);
+        if (!$order) Response::json(['error' => 'Orden no encontrada.'], 404);
+        if ($order['status'] !== 'processing') Response::json(['error' => 'Debes aceptar la orden primero.'], 400);
+        $tracking   = $req->input('tracking_number');
+        $carrier    = $req->input('carrier', 'Correos de Chile');
+        $autoComplete = date('Y-m-d H:i:s', time() + self::AUTO_COMPLETE_DAYS * 86400);
+        $db->beginTransaction();
+        try {
+            $db->update('orders', [
+                'status'          => 'dispatched',
+                'tracking_number' => $tracking,
+                'tracking_carrier'=> $carrier,
+                'dispatched_at'   => date('Y-m-d H:i:s'),
+                'auto_complete_at'=> $autoComplete,
+            ], 'id=?', [$id]);
+            $db->insert('order_tracking', ['order_id' => $id, 'status' => 'dispatched', 'description' => "Despachado por {$carrier}" . ($tracking ? " · Nº seguimiento: {$tracking}" : '')]);
+            $db->insert('order_confirmations', ['order_id' => $id, 'step' => 'vendor_dispatch', 'confirmed_by' => Auth::id(), 'metadata' => json_encode(['tracking_number' => $tracking, 'carrier' => $carrier])]);
+            $this->notify($db, (int)$order['buyer_id'], 'order_dispatched', '🚚 Tu pedido fue despachado', "Orden {$order['order_number']} en camino. Carrier: {$carrier}" . ($tracking ? " · Tracking: {$tracking}" : ''), 'bi-truck', 'info', 'order', $id);
+            $db->commit();
+            Response::json(['message' => 'Despacho confirmado. Comprador notificado.', 'auto_complete_at' => $autoComplete]);
+        } catch (\Throwable $e) { $db->rollback(); Response::json(['error' => 'Error al confirmar despacho.'], 500); }
+    }
+
+    // ── PROTOCOLO PASO 3: Comprador confirma recepción ────
+    public function buyerConfirm(Request $req): void
+    {
+        $id = (int)$req->param('id');
+        $db = DB::getInstance();
+        $order = $db->fetch("SELECT * FROM orders WHERE id=? AND buyer_id=?", [$id, Auth::id()]);
+        if (!$order) Response::json(['error' => 'Orden no encontrada.'], 404);
+        if (!in_array($order['status'], ['dispatched', 'in_transit'])) Response::json(['error' => 'La orden aún no fue despachada.'], 400);
+        $db->beginTransaction();
+        try {
+            $db->update('orders', ['status' => 'completed', 'delivered_at' => date('Y-m-d H:i:s'), 'completed_at' => date('Y-m-d H:i:s')], 'id=?', [$id]);
+            $db->insert('order_tracking', ['order_id' => $id, 'status' => 'completed', 'description' => 'Comprador confirmó recepción. Fondos liberados al vendedor.']);
+            $db->insert('order_confirmations', ['order_id' => $id, 'step' => 'buyer_confirm', 'confirmed_by' => Auth::id(), 'notes' => $req->input('notes')]);
+            $fin = $this->calcFinancials((float)$order['total']);
+            $this->notify($db, (int)$order['seller_id'], 'order_completed', '💰 Fondos liberados', "Orden {$order['order_number']} completada. Recibirás \$" . number_format($fin['vendor_net'], 0, ',', '.') . " CLP.", 'bi-cash-coin', 'success', 'order', $id);
+            $db->commit();
+            Response::json(['message' => 'Recepción confirmada. Fondos liberados al vendedor.']);
+        } catch (\Throwable $e) { $db->rollback(); Response::json(['error' => 'Error al confirmar.'], 500); }
+    }
+
+    // ── PROTOCOLO: Cancelar orden ─────────────────────────
+    public function cancelOrder(Request $req): void
+    {
+        $id     = (int)$req->param('id');
+        $db     = DB::getInstance();
+        $userId = Auth::id();
+        $order  = $db->fetch("SELECT * FROM orders WHERE id=? AND (buyer_id=? OR seller_id=?)", [$id, $userId, $userId]);
+        if (!$order) Response::json(['error' => 'Orden no encontrada.'], 404);
+        if (in_array($order['status'], ['completed','refunded','cancelled'])) Response::json(['error' => 'No se puede cancelar esta orden.'], 400);
+        $db->beginTransaction();
+        try {
+            // Restaurar stock
+            $items = $db->fetchAll("SELECT * FROM order_items WHERE order_id=?", [$id]);
+            foreach ($items as $item) {
+                $db->query("UPDATE products SET stock=stock+?, sales_count=GREATEST(0,sales_count-?) WHERE id=?", [$item['quantity'], $item['quantity'], $item['product_id']]);
+            }
+            $db->update('orders', ['status' => 'cancelled'], 'id=?', [$id]);
+            $db->insert('order_tracking', ['order_id' => $id, 'status' => 'cancelled', 'description' => 'Orden cancelada. ' . ($req->input('reason') ?? '')]);
+            // Notificar al otro participante
+            $notifyUserId = ($userId == $order['buyer_id']) ? $order['seller_id'] : $order['buyer_id'];
+            $this->notify($db, (int)$notifyUserId, 'order_cancelled', '❌ Orden cancelada', "La orden {$order['order_number']} fue cancelada.", 'bi-x-circle', 'danger', 'order', $id);
+            $db->commit();
+            Response::json(['message' => 'Orden cancelada.']);
+        } catch (\Throwable $e) { $db->rollback(); Response::json(['error' => 'Error al cancelar.'], 500); }
+    }
+
+    // ── Abrir disputa ─────────────────────────────────────
+    public function openDispute(Request $req): void
+    {
+        $id   = (int)$req->param('id');
+        $db   = DB::getInstance();
+        $order = $db->fetch("SELECT * FROM orders WHERE id=? AND buyer_id=?", [$id, Auth::id()]);
+        if (!$order) Response::json(['error' => 'Orden no encontrada.'], 404);
+        if (!in_array($order['status'], ['dispatched','in_transit','delivered'])) Response::json(['error' => 'No puedes abrir disputa en esta etapa.'], 400);
+        $existing = $db->fetch("SELECT id FROM order_disputes WHERE order_id=?", [$id]);
+        if ($existing) Response::json(['error' => 'Ya existe una disputa para esta orden.'], 409);
+        $data = $req->validate(['reason' => 'required', 'description' => 'required|min:20']);
+        $db->beginTransaction();
+        try {
+            $db->insert('order_disputes', ['order_id' => $id, 'opened_by' => Auth::id(), 'reason' => $data['reason'], 'description' => $data['description']]);
+            $db->update('orders', ['status' => 'dispute'], 'id=?', [$id]);
+            $db->insert('order_tracking', ['order_id' => $id, 'status' => 'dispute', 'description' => 'Disputa abierta: ' . $data['reason']]);
+            $this->notify($db, (int)$order['seller_id'], 'dispute_opened', '⚠️ Disputa abierta', "El comprador abrió una disputa en la orden {$order['order_number']}.", 'bi-shield-exclamation', 'warning', 'order', $id);
+            $db->commit();
+            Response::json(['message' => 'Disputa abierta. El equipo revisará el caso.'], 201);
+        } catch (\Throwable $e) { $db->rollback(); Response::json(['error' => 'Error al abrir disputa.'], 500); }
+    }
+
+    // ── Notificaciones ────────────────────────────────────
+    public function getNotifications(Request $req): void
+    {
+        $db    = DB::getInstance();
+        $page  = (int)$req->input('page', 1);
+        $unread = $req->input('unread');
+        $sql   = "SELECT * FROM notifications WHERE user_id=?";
+        $b     = [Auth::id()];
+        if ($unread) { $sql .= " AND read_at IS NULL"; }
+        $sql .= " ORDER BY created_at DESC";
+        $result = $db->paginate($sql, $b, $page, 20);
+        $result['unread_count'] = (int)$db->fetch("SELECT COUNT(*) AS c FROM notifications WHERE user_id=? AND read_at IS NULL", [Auth::id()])['c'];
+        Response::json($result);
+    }
+
+    public function markNotificationRead(Request $req): void
+    {
+        $id = (int)$req->param('id');
+        DB::getInstance()->update('notifications', ['read_at' => date('Y-m-d H:i:s')], 'id=? AND user_id=?', [$id, Auth::id()]);
+        Response::json(['message' => 'Marcada como leída.']);
+    }
+
+    public function markAllRead(Request $req): void
+    {
+        DB::getInstance()->query("UPDATE notifications SET read_at=NOW() WHERE user_id=? AND read_at IS NULL", [Auth::id()]);
+        Response::json(['message' => 'Todas marcadas como leídas.']);
+    }
+
+    // ── Chat por orden ────────────────────────────────────
+    public function getMessages(Request $req): void
+    {
+        $id    = (int)$req->param('id');
+        $db    = DB::getInstance();
+        $order = $db->fetch("SELECT * FROM orders WHERE id=? AND (buyer_id=? OR seller_id=?)", [$id, Auth::id(), Auth::id()]);
+        if (!$order) Response::json(['error' => 'No autorizado.'], 403);
+        $msgs = $db->fetchAll("SELECT om.*, u.name AS sender_name, u.avatar AS sender_avatar FROM order_messages om JOIN users u ON u.id=om.sender_id WHERE om.order_id=? ORDER BY om.created_at ASC", [$id]);
+        // Marcar como leídos
+        $db->query("UPDATE order_messages SET read_at=NOW() WHERE order_id=? AND sender_id != ? AND read_at IS NULL", [$id, Auth::id()]);
+        Response::json(['messages' => $msgs, 'order_number' => $order['order_number']]);
+    }
+
+    public function sendMessage(Request $req): void
+    {
+        $id   = (int)$req->param('id');
+        $db   = DB::getInstance();
+        $data = $req->validate(['message' => 'required|min:1']);
+        $order = $db->fetch("SELECT * FROM orders WHERE id=? AND (buyer_id=? OR seller_id=?)", [$id, Auth::id(), Auth::id()]);
+        if (!$order) Response::json(['error' => 'No autorizado.'], 403);
+        $msgId = $db->insert('order_messages', ['order_id' => $id, 'sender_id' => Auth::id(), 'message' => trim($data['message']), 'type' => 'text']);
+        // Notificar al otro
+        $receiver = (Auth::id() == $order['buyer_id']) ? $order['seller_id'] : $order['buyer_id'];
+        $sender   = $db->fetch("SELECT name FROM users WHERE id=?", [Auth::id()]);
+        $this->notify($db, (int)$receiver, 'new_message', '💬 Nuevo mensaje', $sender['name'] . ': ' . substr(trim($data['message']), 0, 80), 'bi-chat-dots', 'info', 'order', $id);
+        $msg = $db->fetch("SELECT om.*, u.name AS sender_name, u.avatar AS sender_avatar FROM order_messages om JOIN users u ON u.id=om.sender_id WHERE om.id=?", [$msgId]);
+        Response::json(['message' => $msg], 201);
     }
 }
 
