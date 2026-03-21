@@ -519,10 +519,10 @@ class AdminController
         // ── Top productos más vendidos ────────────────────────────────────
         $topSelling = $db->fetchAll(
             "SELECT p.id, p.title, p.price, p.sales_count, p.views, p.rating_avg, p.rating_count,
-                    pi.url AS image, u.name AS seller_name,
+                    (SELECT url FROM product_images WHERE product_id=p.id AND is_primary=1 LIMIT 1) AS image,
+                    u.name AS seller_name,
                     IFNULL(p.sales_count * p.price, 0) AS revenue
              FROM products p
-             LEFT JOIN product_images pi ON pi.product_id=p.id AND pi.is_primary=1
              LEFT JOIN users u ON u.id=p.seller_id
              WHERE p.status='active'
              ORDER BY p.sales_count DESC LIMIT 8"
@@ -531,9 +531,9 @@ class AdminController
         // ── Top productos más vistos ──────────────────────────────────────
         $topViewed = $db->fetchAll(
             "SELECT p.id, p.title, p.price, p.views, p.sales_count, p.rating_avg,
-                    pi.url AS image, u.name AS seller_name
+                    (SELECT url FROM product_images WHERE product_id=p.id AND is_primary=1 LIMIT 1) AS image,
+                    u.name AS seller_name
              FROM products p
-             LEFT JOIN product_images pi ON pi.product_id=p.id AND pi.is_primary=1
              LEFT JOIN users u ON u.id=p.seller_id
              WHERE p.status='active'
              ORDER BY p.views DESC LIMIT 8"
@@ -542,12 +542,11 @@ class AdminController
         // ── Top favoritos (wishlists) ─────────────────────────────────────
         $topFavorites = $db->fetchAll(
             "SELECT p.id, p.title, p.price, COUNT(w.id) AS wishlist_count,
-                    pi.url AS image
+                    (SELECT url FROM product_images WHERE product_id=p.id AND is_primary=1 LIMIT 1) AS image
              FROM products p
              LEFT JOIN wishlists w ON w.product_id=p.id
-             LEFT JOIN product_images pi ON pi.product_id=p.id AND pi.is_primary=1
              WHERE p.status='active'
-             GROUP BY p.id ORDER BY wishlist_count DESC LIMIT 6"
+             GROUP BY p.id, p.title, p.price ORDER BY wishlist_count DESC LIMIT 6"
         );
 
         // ── Mejores vendedores ────────────────────────────────────────────
@@ -561,7 +560,7 @@ class AdminController
              LEFT JOIN products p ON p.seller_id=u.id AND p.status='active'
              LEFT JOIN order_items oi ON oi.seller_id=u.id
              WHERE u.role IN ('seller','admin')
-             GROUP BY u.id ORDER BY total_sales DESC LIMIT 6"
+             GROUP BY u.id, u.name, u.avatar ORDER BY total_sales DESC LIMIT 6"
         );
 
         // ── Mejores compradores ───────────────────────────────────────────
@@ -572,7 +571,7 @@ class AdminController
              FROM users u
              LEFT JOIN orders o ON o.buyer_id=u.id AND o.status NOT IN ('cancelled','refunded')
              WHERE u.role='buyer'
-             GROUP BY u.id ORDER BY total_spent DESC LIMIT 6"
+             GROUP BY u.id, u.name, u.avatar ORDER BY total_spent DESC LIMIT 6"
         );
 
         // ── Reputación global ─────────────────────────────────────────────
@@ -595,7 +594,7 @@ class AdminController
             "SELECT c.name, COUNT(p.id) AS products, IFNULL(SUM(p.sales_count),0) AS sales
              FROM categories c
              LEFT JOIN products p ON p.category_id=c.id AND p.status='active'
-             GROUP BY c.id ORDER BY sales DESC LIMIT 8"
+             GROUP BY c.id, c.name ORDER BY sales DESC LIMIT 8"
         );
 
         Response::json([
