@@ -560,22 +560,159 @@
 
     <!-- MY ORDERS -->
     <template v-if="currentView === 'orders'">
-      <h3 class="section-title mb-4">Mis compras</h3>
+      <h3 class="section-title mb-4"><i class="bi bi-bag me-2 text-primary"></i>Mis compras</h3>
       <div v-if="ordersLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
       <div v-else>
-        <div v-for="o in orders" :key="o.id" class="bg-white rounded p-4 mb-3 shadow-sm">
-          <div class="d-flex justify-content-between align-items-center">
-            <div>
-              <span class="fw-bold">{{ o.order_number }}</span>
-              <span class="text-muted small ms-2">{{ formatDate(o.created_at) }}</span>
+
+        <!-- Detalle de orden seleccionada -->
+        <div v-if="selectedOrder" class="mb-4">
+          <button class="btn btn-outline-secondary btn-sm mb-3" @click="selectedOrder=null">
+            <i class="bi bi-arrow-left me-1"></i>Volver a mis compras
+          </button>
+
+          <!-- Comprobante -->
+          <div class="bg-white rounded shadow-sm p-4 mb-3" id="comprobante">
+            <div class="d-flex justify-content-between align-items-start mb-4">
+              <div>
+                <div class="brand fw-bold" style="font-family:Sora,sans-serif;font-size:1.3rem">
+                  Mercado<span style="color:var(--ms-blue)">Sordo</span>
+                </div>
+                <div class="text-muted small mt-1">Comprobante de compra</div>
+              </div>
+              <div class="text-end">
+                <div class="fw-bold fs-5">{{ selectedOrder.order_number }}</div>
+                <div class="text-muted small">{{ formatDate(selectedOrder.created_at) }}</div>
+                <span class="badge mt-1" :class="statusBadge(selectedOrder.status)">{{ statusLabel(selectedOrder.status) }}</span>
+              </div>
             </div>
-            <span class="badge" :class="statusBadge(o.status)">{{ statusLabel(o.status) }}</span>
+
+            <!-- Datos comprador -->
+            <div class="row g-3 mb-4">
+              <div class="col-md-6">
+                <div class="bg-light rounded p-3">
+                  <div class="fw-bold small text-muted mb-2"><i class="bi bi-person me-1"></i>COMPRADOR</div>
+                  <div class="fw-bold">{{ auth.user?.name }}</div>
+                  <div class="text-muted small">{{ auth.user?.email }}</div>
+                  <div class="text-muted small" v-if="auth.user?.rut">RUT: {{ auth.user?.rut }}</div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="bg-light rounded p-3">
+                  <div class="fw-bold small text-muted mb-2"><i class="bi bi-geo-alt me-1"></i>DIRECCIÓN DE ENVÍO</div>
+                  <div v-if="selectedOrder.address_snapshot">
+                    <div class="fw-bold">{{ JSON.parse(selectedOrder.address_snapshot).full_name }}</div>
+                    <div class="text-muted small">{{ JSON.parse(selectedOrder.address_snapshot).address }}</div>
+                    <div class="text-muted small">{{ JSON.parse(selectedOrder.address_snapshot).city }}, {{ JSON.parse(selectedOrder.address_snapshot).region }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Productos -->
+            <h6 class="fw-bold mb-3">Productos</h6>
+            <div v-if="selectedOrder.items" class="mb-3">
+              <div v-for="item in selectedOrder.items" :key="item.id"
+                   class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                <div class="d-flex gap-3 align-items-center">
+                  <div>
+                    <div class="fw-bold small">{{ item.title }}</div>
+                    <div class="text-muted small">SKU: {{ item.sku || '—' }} · Cant: {{ item.quantity }}</div>
+                  </div>
+                </div>
+                <div class="text-end">
+                  <div class="fw-bold">{{ formatCLP(item.subtotal) }}</div>
+                  <div class="text-muted small">{{ formatCLP(item.price) }} c/u</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Totales -->
+            <div class="d-flex justify-content-end">
+              <div style="min-width:240px">
+                <div class="d-flex justify-content-between mb-1 small">
+                  <span class="text-muted">Subtotal</span>
+                  <span>{{ formatCLP(selectedOrder.subtotal) }}</span>
+                </div>
+                <div class="d-flex justify-content-between mb-1 small text-success">
+                  <span>Envío</span><span>Gratis</span>
+                </div>
+                <hr class="my-2">
+                <div class="d-flex justify-content-between fw-bold">
+                  <span>Total pagado</span>
+                  <span class="text-primary">{{ formatCLP(selectedOrder.total) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Método de pago -->
+            <div class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center">
+              <div class="small text-muted">
+                <i class="bi bi-credit-card me-1"></i>
+                Método: <strong>{{ selectedOrder.payment_method === 'mercadopago' ? 'Mercado Pago' : selectedOrder.payment_method === 'bank_transfer' ? 'Transferencia bancaria' : selectedOrder.payment_method }}</strong>
+              </div>
+              <div class="d-flex gap-2">
+                <button v-if="selectedOrder.status === 'pending'"
+                        class="btn btn-primary btn-sm fw-bold"
+                        @click="retryPayment(selectedOrder)">
+                  <i class="bi bi-credit-card me-1"></i>Reintentar pago
+                </button>
+                <button class="btn btn-outline-primary btn-sm" onclick="window.print()">
+                  <i class="bi bi-printer me-1"></i>Imprimir
+                </button>
+              </div>
+            </div>
+
+            <!-- Tracking -->
+            <div class="mt-4" v-if="selectedOrder.tracking?.length">
+              <h6 class="fw-bold mb-3"><i class="bi bi-truck me-2 text-primary"></i>Seguimiento</h6>
+              <div class="d-flex flex-column gap-2">
+                <div v-for="t in selectedOrder.tracking" :key="t.id"
+                     class="d-flex gap-3 align-items-start">
+                  <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center flex-shrink-0"
+                       style="width:28px;height:28px;font-size:.7rem;color:white">
+                    <i class="bi bi-check-lg"></i>
+                  </div>
+                  <div>
+                    <div class="fw-bold small">{{ statusLabel(t.status) }}</div>
+                    <div class="text-muted small">{{ t.description }}</div>
+                    <div class="text-muted" style="font-size:.72rem">{{ formatDate(t.created_at) }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="mt-2 text-muted small">{{ o.items_count }} productos · Total: {{ formatCLP(o.total) }}</div>
         </div>
-        <div v-if="orders.length === 0" class="text-center py-5 text-muted">
-          <i class="bi bi-box fs-1"></i><p class="mt-2">No tienes compras aún</p>
+
+        <!-- Lista órdenes -->
+        <div v-else>
+          <div v-for="o in orders" :key="o.id"
+               class="bg-white rounded p-4 mb-3 shadow-sm"
+               style="cursor:pointer;transition:box-shadow .15s"
+               @mouseenter="$event.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,.12)'"
+               @mouseleave="$event.currentTarget.style.boxShadow=''"
+               @click="loadOrderDetail(o.id)">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <span class="fw-bold">{{ o.order_number }}</span>
+                <span class="text-muted small ms-2">{{ formatDate(o.created_at) }}</span>
+              </div>
+              <span class="badge" :class="statusBadge(o.status)">{{ statusLabel(o.status) }}</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mt-2">
+              <div class="text-muted small">{{ o.items_count }} producto(s)</div>
+              <div class="fw-bold text-primary">{{ formatCLP(o.total) }}</div>
+            </div>
+            <div class="text-muted small mt-1">
+              <i class="bi bi-eye me-1"></i>Click para ver comprobante
+            </div>
+          </div>
+          <div v-if="orders.length === 0" class="text-center py-5 text-muted bg-white rounded shadow-sm">
+            <i class="bi bi-bag fs-1"></i>
+            <p class="mt-2 fw-bold">No tienes compras aún</p>
+            <button class="btn btn-primary" @click="navigate('home')">Ver productos</button>
+          </div>
         </div>
+
       </div>
     </template>
 
@@ -1246,6 +1383,11 @@
                @click.prevent="profileTab='addresses'">
               <i class="bi bi-geo-alt"></i> Direcciones
             </a>
+            <a href="#" class="d-flex align-items-center gap-2 px-3 py-3 border-bottom text-decoration-none"
+               :class="profileTab==='payments' ? 'bg-primary bg-opacity-10 text-primary fw-bold' : 'text-dark'"
+               @click.prevent="profileTab='payments'">
+              <i class="bi bi-wallet2"></i> Métodos de pago
+            </a>
             <a href="#" class="d-flex align-items-center gap-2 px-3 py-3 text-decoration-none"
                :class="profileTab==='prefs' ? 'bg-primary bg-opacity-10 text-primary fw-bold' : 'text-dark'"
                @click.prevent="profileTab='prefs'">
@@ -1530,6 +1672,222 @@
             </div>
           </div>
 
+          <!-- ── TAB: MÉTODOS DE PAGO ── -->
+          <div v-if="profileTab==='payments'" class="bg-white rounded shadow-sm p-4">
+            <h5 class="fw-bold mb-1"><i class="bi bi-wallet2 me-2 text-primary"></i>Métodos de pago</h5>
+            <p class="text-muted small mb-4">
+              <span v-if="auth.user?.role === 'buyer'">Selecciona cómo prefieres pagar en MercadoSordo.</span>
+              <span v-else>Configura qué métodos de pago aceptas como vendedor. Los compradores verán estas opciones al comprar tus productos.</span>
+            </p>
+
+            <!-- Lista de métodos -->
+            <div class="d-flex flex-column gap-3 mb-4">
+
+              <!-- Mercado Pago -->
+              <div class="border rounded p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="rounded d-flex align-items-center justify-content-center"
+                         style="width:44px;height:44px;background:#009ee3">
+                      <img src="https://www.mercadopago.com/org-img/MP3/home/logomp.png"
+                           style="height:20px;filter:brightness(10)">
+                    </div>
+                    <div>
+                      <div class="fw-bold">Mercado Pago</div>
+                      <div class="text-muted small">Tarjeta de crédito, débito y cuotas</div>
+                    </div>
+                  </div>
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox"
+                           v-model="paymentMethods.mercadopago.enabled"
+                           style="width:2.5rem;height:1.25rem">
+                  </div>
+                </div>
+                <div v-if="paymentMethods.mercadopago.enabled" class="mt-3 pt-3 border-top">
+                  <label class="form-label fw-bold small">Link de pago <span class="text-danger">*</span></label>
+                  <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-link-45deg"></i></span>
+                    <input type="url" class="form-control"
+                           v-model="paymentMethods.mercadopago.link"
+                           placeholder="https://link.mercadopago.cl/tu-usuario">
+                  </div>
+                  <small class="text-muted">Tu link de cobro de Mercado Pago</small>
+                </div>
+              </div>
+
+              <!-- Billetera Digital personalizada -->
+              <div class="border rounded p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="rounded d-flex align-items-center justify-content-center"
+                         style="width:44px;height:44px;background:#6f42c1">
+                      <i class="bi bi-phone-fill text-white" style="font-size:1.2rem"></i>
+                    </div>
+                    <div>
+                      <div class="fw-bold">Billetera Digital</div>
+                      <div class="text-muted small">Mach, BICE Vida, Tenpo, Fintual u otra</div>
+                    </div>
+                  </div>
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox"
+                           v-model="paymentMethods.wallet.enabled"
+                           style="width:2.5rem;height:1.25rem">
+                  </div>
+                </div>
+                <div v-if="paymentMethods.wallet.enabled" class="mt-3 pt-3 border-top">
+                  <div class="row g-2">
+                    <div class="col-md-6">
+                      <label class="form-label fw-bold small">Nombre de la billetera</label>
+                      <select class="form-select form-select-sm" v-model="paymentMethods.wallet.provider">
+                        <option value="">— Selecciona —</option>
+                        <option>Mach</option>
+                        <option>Tenpo</option>
+                        <option>BICE Vida</option>
+                        <option>Fintual</option>
+                        <option>Dale!</option>
+                        <option>Copec Pay</option>
+                        <option>Otra</option>
+                      </select>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label fw-bold small">Usuario / teléfono</label>
+                      <input type="text" class="form-control form-control-sm"
+                             v-model="paymentMethods.wallet.account"
+                             placeholder="+56 9 1234 5678 o @usuario">
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label fw-bold small">Instrucciones para el comprador</label>
+                      <input type="text" class="form-control form-control-sm"
+                             v-model="paymentMethods.wallet.instructions"
+                             placeholder="Ej: Enviar al +56912345678 con el número de orden en el comentario">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Transferencia Manual -->
+              <div class="border rounded p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="rounded d-flex align-items-center justify-content-center"
+                         style="width:44px;height:44px;background:#198754">
+                      <i class="bi bi-bank2 text-white" style="font-size:1.2rem"></i>
+                    </div>
+                    <div>
+                      <div class="fw-bold">Transferencia Bancaria Manual</div>
+                      <div class="text-muted small">El comprador te transfiere directo</div>
+                    </div>
+                  </div>
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox"
+                           v-model="paymentMethods.transfer.enabled"
+                           style="width:2.5rem;height:1.25rem">
+                  </div>
+                </div>
+                <div v-if="paymentMethods.transfer.enabled" class="mt-3 pt-3 border-top">
+                  <div class="row g-2">
+                    <div class="col-md-6">
+                      <label class="form-label fw-bold small">Banco</label>
+                      <select class="form-select form-select-sm" v-model="paymentMethods.transfer.bank">
+                        <option value="">— Selecciona —</option>
+                        <option>Banco de Chile</option>
+                        <option>BancoEstado</option>
+                        <option>Santander</option>
+                        <option>BCI</option>
+                        <option>Itaú</option>
+                        <option>Scotiabank</option>
+                        <option>BICE</option>
+                        <option>Security</option>
+                        <option>Falabella</option>
+                        <option>Ripley</option>
+                      </select>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label fw-bold small">Tipo de cuenta</label>
+                      <select class="form-select form-select-sm" v-model="paymentMethods.transfer.account_type">
+                        <option value="cuenta_corriente">Cuenta Corriente</option>
+                        <option value="cuenta_ahorro">Cuenta de Ahorro</option>
+                        <option value="cuenta_vista">Cuenta Vista</option>
+                        <option value="cuenta_rut">Cuenta RUT</option>
+                      </select>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label fw-bold small">Número de cuenta</label>
+                      <input type="text" class="form-control form-control-sm"
+                             v-model="paymentMethods.transfer.account_number"
+                             placeholder="0000000000">
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label fw-bold small">Nombre titular</label>
+                      <input type="text" class="form-control form-control-sm"
+                             v-model="paymentMethods.transfer.account_name"
+                             :placeholder="auth.user?.name">
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label fw-bold small">RUT titular</label>
+                      <input type="text" class="form-control form-control-sm bg-light"
+                             :value="auth.user?.rut" disabled>
+                      <small class="text-muted">Se usa el RUT de tu perfil</small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Texto libre / Instrucciones personalizadas -->
+              <div class="border rounded p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="rounded d-flex align-items-center justify-content-center"
+                         style="width:44px;height:44px;background:#fd7e14">
+                      <i class="bi bi-chat-text-fill text-white" style="font-size:1.2rem"></i>
+                    </div>
+                    <div>
+                      <div class="fw-bold">Instrucciones personalizadas</div>
+                      <div class="text-muted small">Texto libre que verá el comprador al pagar</div>
+                    </div>
+                  </div>
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox"
+                           v-model="paymentMethods.custom.enabled"
+                           style="width:2.5rem;height:1.25rem">
+                  </div>
+                </div>
+                <div v-if="paymentMethods.custom.enabled" class="mt-3 pt-3 border-top">
+                  <label class="form-label fw-bold small">Mensaje para el comprador</label>
+                  <textarea class="form-control" rows="3"
+                            v-model="paymentMethods.custom.text"
+                            placeholder="Ej: Pagar mediante depósito en cualquier sucursal de BancoEstado a nombre de Juan Pérez, RUT 12.345.678-9, cuenta corriente N° 12345678. Enviar comprobante al +56912345678."
+                            maxlength="500"></textarea>
+                  <small class="text-muted d-flex justify-content-end">{{ paymentMethods.custom.text.length }}/500</small>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Resumen activos -->
+            <div class="bg-light rounded p-3 mb-4" v-if="activePaymentMethods.length > 0">
+              <div class="fw-bold small mb-2"><i class="bi bi-check-circle-fill text-success me-1"></i>Métodos activos:</div>
+              <div class="d-flex flex-wrap gap-2">
+                <span v-for="m in activePaymentMethods" :key="m" class="badge bg-primary">{{ m }}</span>
+              </div>
+            </div>
+
+            <!-- Alerta sin métodos -->
+            <div class="alert alert-warning small" v-if="activePaymentMethods.length === 0">
+              <i class="bi bi-exclamation-triangle me-1"></i>
+              Sin métodos de pago activos. Los compradores no podrán completar el pago de tus productos.
+            </div>
+
+            <!-- Botón guardar -->
+            <div class="alert alert-success small" v-if="paymentMethodsSaved">
+              <i class="bi bi-check-circle me-1"></i>Métodos de pago guardados correctamente.
+            </div>
+            <button class="btn btn-primary fw-bold px-4" @click="savePaymentMethods" :disabled="profileLoading">
+              <span v-if="profileLoading" class="spinner-border spinner-border-sm me-2"></span>
+              <i class="bi bi-cloud-check me-1" v-else></i>Guardar métodos de pago
+            </button>
+          </div>
+
           <!-- ── TAB: PREFERENCIAS ── -->
           <div v-if="profileTab==='prefs'" class="bg-white rounded shadow-sm p-4">
             <h5 class="fw-bold mb-4"><i class="bi bi-sliders me-2 text-primary"></i>Preferencias</h5>
@@ -1802,37 +2160,42 @@
             <div v-if="checkoutStep===2" class="bg-white rounded shadow-sm p-4">
               <h5 class="fw-bold mb-4"><i class="bi bi-credit-card me-2 text-primary"></i>Método de pago</h5>
 
-              <!-- Selector método -->
-              <div v-if="!checkoutOrderId" class="row g-3 mb-4">
-                <!-- Mercado Pago -->
-                <div class="col-md-6">
-                  <div class="p-3 rounded border h-100" style="cursor:pointer;transition:all .15s"
-                       :class="selectedPayMethod==='mercadopago'?'border-primary bg-primary bg-opacity-10':''"
-                       @click="selectedPayMethod='mercadopago'">
-                    <div class="d-flex align-items-center gap-2 mb-2">
-                      <i class="bi" style="font-size:1.2rem"
-                         :class="selectedPayMethod==='mercadopago'?'bi-record-circle-fill text-primary':'bi-circle text-muted'"></i>
-                      <img src="https://www.mercadopago.com/org-img/MP3/home/logomp.png" style="height:24px">
-                    </div>
-                    <div class="fw-bold small">Mercado Pago</div>
-                    <div class="text-muted" style="font-size:.78rem">
-                      Tarjeta, débito, cuotas · Pago inmediato
-                    </div>
-                  </div>
+              <!-- Métodos del vendedor disponibles -->
+              <div v-if="!checkoutOrderId" class="mb-4">
+                <div v-if="vendorPaymentMethods.length === 0"
+                     class="alert alert-warning small">
+                  <i class="bi bi-exclamation-triangle me-1"></i>
+                  El vendedor no tiene métodos de pago configurados aún.
+                  Contacta al vendedor directamente.
                 </div>
-                <!-- Transferencia bancaria -->
-                <div class="col-md-6">
-                  <div class="p-3 rounded border h-100" style="cursor:pointer;transition:all .15s"
-                       :class="selectedPayMethod==='bank_transfer'?'border-primary bg-primary bg-opacity-10':''"
-                       @click="selectedPayMethod='bank_transfer'">
-                    <div class="d-flex align-items-center gap-2 mb-2">
-                      <i class="bi" style="font-size:1.2rem"
-                         :class="selectedPayMethod==='bank_transfer'?'bi-record-circle-fill text-primary':'bi-circle text-muted'"></i>
-                      <i class="bi bi-bank2 text-primary" style="font-size:1.4rem"></i>
+                <div v-else class="d-flex flex-column gap-2">
+                  <div v-for="method in vendorPaymentMethods" :key="method.key"
+                       class="p-3 rounded border"
+                       style="cursor:pointer;transition:all .15s"
+                       :class="selectedPayMethod===method.key ? 'border-primary bg-primary bg-opacity-10' : ''"
+                       @click="selectedPayMethod=method.key; selectedPayDetails=method">
+                    <div class="d-flex align-items-center gap-3">
+                      <i class="bi flex-shrink-0" style="font-size:1.3rem"
+                         :class="selectedPayMethod===method.key ? 'bi-record-circle-fill text-primary' : 'bi-circle text-muted'"></i>
+                      <!-- Ícono del método -->
+                      <div class="rounded d-flex align-items-center justify-content-center flex-shrink-0"
+                           :style="'width:38px;height:38px;background:'+method.color">
+                        <img v-if="method.key==='mercadopago'"
+                             src="https://www.mercadopago.com/org-img/MP3/home/logomp.png"
+                             style="height:16px;filter:brightness(10)">
+                        <i v-else :class="'bi '+method.icon+' text-white'" style="font-size:1rem"></i>
+                      </div>
+                      <div class="flex-grow-1">
+                        <div class="fw-bold small">{{ method.label }}</div>
+                        <div class="text-muted" style="font-size:.75rem">{{ method.desc }}</div>
+                      </div>
+                      <span v-if="method.recommended"
+                            class="badge bg-success" style="font-size:.65rem">Recomendado</span>
                     </div>
-                    <div class="fw-bold small">Transferencia Bancaria</div>
-                    <div class="text-muted" style="font-size:.78rem">
-                      Vía Khipu · Directo desde tu banco
+                    <!-- Detalle si está seleccionado -->
+                    <div v-if="selectedPayMethod===method.key && method.detail"
+                         class="mt-2 ms-5 ps-1 small text-muted border-start border-primary ps-3">
+                      {{ method.detail }}
                     </div>
                   </div>
                 </div>
@@ -1860,13 +2223,25 @@
               </div>
 
               <!-- Redirect MP -->
-              <div v-if="mpInitPoint" class="text-center py-3">
-                <div class="mb-3"><img src="https://www.mercadopago.com/org-img/MP3/home/logomp.png" style="height:36px"></div>
-                <p class="text-muted small mb-4">Haz clic para completar el pago de forma segura en Mercado Pago.</p>
-                <a :href="mpInitPoint" class="btn fw-bold px-5 py-3 w-100 text-white"
+              <div v-if="mpInitPoint || (checkoutOrderId && selectedPayMethod==='mercadopago')" class="text-center py-3">
+                <div class="mb-3">
+                  <img src="https://www.mercadopago.com/org-img/MP3/home/logomp.png" style="height:36px">
+                </div>
+                <p class="text-muted small mb-3">Serás redirigido a Mercado Pago para completar el pago de forma segura.</p>
+                <p class="text-muted small mb-4">
+                  <i class="bi bi-info-circle me-1"></i>
+                  En el campo "¿Para qué es?" escribe el número de orden:
+                  <strong>{{ checkoutOrderNumber }}</strong>
+                </p>
+                <a :href="mpInitPoint || 'https://link.mercadopago.cl/mercadosordo'"
+                   target="_blank"
+                   class="btn fw-bold px-5 py-3 w-100 text-white"
                    style="background:#009ee3;border-color:#009ee3;font-size:1.05rem">
-                  <i class="bi bi-shield-check me-2"></i>Ir a Mercado Pago · {{formatCLP(cart.total)}}
+                  <i class="bi bi-shield-check me-2"></i>Pagar {{ formatCLP(cart.total || checkoutAmount) }} con Mercado Pago
                 </a>
+                <p class="text-muted mt-3" style="font-size:.75rem">
+                  <i class="bi bi-lock me-1"></i>Pago 100% seguro · Tu orden: <strong>{{ checkoutOrderNumber }}</strong>
+                </p>
               </div>
 
               <!-- Redirect Khipu -->
@@ -1877,6 +2252,35 @@
                 <a :href="bankPayUrl" class="btn btn-success fw-bold px-5 py-3 w-100" style="font-size:1.05rem">
                   <i class="bi bi-bank2 me-2"></i>Transferir {{formatCLP(cart.total)}} vía Khipu
                 </a>
+              </div>
+
+              <!-- Instrucciones manuales (wallet / transfer sin API / custom) -->
+              <div v-if="checkoutOrderId && !mpInitPoint && !bankPayUrl && selectedPayDetails"
+                   class="py-3">
+                <div class="text-center mb-3">
+                  <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-2"
+                       :style="'width:60px;height:60px;background:'+selectedPayDetails.color">
+                    <i :class="'bi '+selectedPayDetails.icon+' text-white'" style="font-size:1.5rem"></i>
+                  </div>
+                  <h5 class="fw-bold">{{ selectedPayDetails.label }}</h5>
+                </div>
+                <!-- Instrucciones del vendedor -->
+                <div class="bg-light rounded p-3 mb-3 text-muted small" style="white-space:pre-wrap">
+                  {{ selectedPayDetails.detail || 'Contacta al vendedor para coordinar el pago.' }}
+                </div>
+                <!-- Datos de la orden -->
+                <div class="bg-primary bg-opacity-10 border border-primary rounded p-3 mb-3">
+                  <div class="fw-bold small mb-1">Datos de tu orden:</div>
+                  <div class="small">N° Orden: <strong>{{ checkoutOrderNumber }}</strong></div>
+                  <div class="small">Total: <strong>{{ formatCLP(cart.total || checkoutAmount) }}</strong></div>
+                  <div class="small text-muted mt-1">
+                    Incluye el número de orden en el comentario/descripción del pago.
+                  </div>
+                </div>
+                <div class="alert alert-success small">
+                  <i class="bi bi-check-circle me-1"></i>
+                  Tu orden fue creada. Una vez que el vendedor confirme el pago, recibirás la confirmación.
+                </div>
               </div>
 
               <!-- Error -->
@@ -2267,7 +2671,8 @@ const app = createApp({
 
     const cart = ref({ items: [], total: 0, count: 0 });
     const orders = ref([]);
-    const ordersLoading = ref(false);
+    const ordersLoading  = ref(false);
+    const selectedOrder  = ref(null);
 
     // ── Mis Ventas ─────────────────────────────────────────────────────────
     const sellerTab       = ref('list');
@@ -2628,6 +3033,118 @@ const app = createApp({
       address: '', city: '', region: '', zip_code: '', is_default: false
     });
 
+    // ── Métodos de pago ─────────────────────────────────────────────────
+    const paymentMethodsSaved  = ref(false);
+    const selectedPayDetails   = ref(null);
+    const vendorPaymentMethods = ref([]);   // métodos del vendedor visibles en checkout
+
+    const paymentMethods = ref({
+      mercadopago: { enabled: false, link: 'https://link.mercadopago.cl/mercadosordo' },
+      wallet:      { enabled: false, provider: '', account: '', instructions: '' },
+      transfer:    { enabled: false, bank: '', account_type: 'cuenta_corriente', account_number: '', account_name: '' },
+      custom:      { enabled: false, text: '' },
+    });
+
+    const activePaymentMethods = computed(() => {
+      const names = { mercadopago: 'Mercado Pago', wallet: 'Billetera Digital', transfer: 'Transferencia', custom: 'Personalizado' };
+      return Object.entries(paymentMethods.value)
+        .filter(([, v]) => v.enabled)
+        .map(([k]) => names[k]);
+    });
+
+    // Construir lista de métodos del vendedor para mostrar en checkout
+    function buildVendorMethods(methods) {
+      const list = [];
+      if (methods.mercadopago?.enabled) {
+        list.push({
+          key: 'mercadopago', label: 'Mercado Pago',
+          desc: 'Tarjeta de crédito, débito, cuotas',
+          icon: 'bi-credit-card', color: '#009ee3',
+          detail: methods.mercadopago.link ? 'Serás redirigido a: ' + methods.mercadopago.link : null,
+          link: methods.mercadopago.link,
+          recommended: true,
+        });
+      }
+      if (methods.wallet?.enabled) {
+        list.push({
+          key: 'wallet', label: methods.wallet.provider || 'Billetera Digital',
+          desc: methods.wallet.account || 'Pago por billetera digital',
+          icon: 'bi-phone-fill', color: '#6f42c1',
+          detail: methods.wallet.instructions,
+        });
+      }
+      if (methods.transfer?.enabled) {
+        list.push({
+          key: 'bank_transfer', label: 'Transferencia Bancaria',
+          desc: (methods.transfer.bank || '') + ' · ' + (methods.transfer.account_name || ''),
+          icon: 'bi-bank2', color: '#198754',
+          detail: methods.transfer.bank
+            ? `${methods.transfer.bank} · ${({cuenta_corriente:'Cta. Corriente',cuenta_ahorro:'Cta. Ahorro',cuenta_vista:'Cta. Vista',cuenta_rut:'Cta. RUT'})[methods.transfer.account_type] || ''} N° ${methods.transfer.account_number}`
+            : null,
+        });
+      }
+      if (methods.custom?.enabled && methods.custom.text) {
+        list.push({
+          key: 'custom', label: 'Otro método de pago',
+          desc: methods.custom.text.substring(0, 60) + (methods.custom.text.length > 60 ? '...' : ''),
+          icon: 'bi-chat-text-fill', color: '#fd7e14',
+          detail: methods.custom.text,
+        });
+      }
+      return list;
+    }
+
+    function savePaymentMethods() {
+      profileLoading.value = true;
+      const key = 'ms_pm_' + (auth.value.user?.id || 'guest');
+      localStorage.setItem(key, JSON.stringify(paymentMethods.value));
+      setTimeout(() => {
+        profileLoading.value   = false;
+        paymentMethodsSaved.value = true;
+        setTimeout(() => paymentMethodsSaved.value = false, 3000);
+        toast('Métodos de pago guardados ✓');
+      }, 400);
+    }
+
+    function loadPaymentMethods() {
+      const key   = 'ms_pm_' + (auth.value.user?.id || 'guest');
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        try { paymentMethods.value = { ...paymentMethods.value, ...JSON.parse(saved) }; } catch {}
+      }
+    }
+
+    // Cargar métodos del vendedor de los items del carrito
+    function loadVendorPaymentMethods() {
+      if (!cart.value.items?.length) { vendorPaymentMethods.value = []; return; }
+      // Obtener seller_id del primer item
+      const sellerId = cart.value.items[0]?.seller_id;
+      if (!sellerId) { vendorPaymentMethods.value = []; return; }
+      const key   = 'ms_pm_' + sellerId;
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        try {
+          const methods = JSON.parse(saved);
+          vendorPaymentMethods.value = buildVendorMethods(methods);
+          // Preseleccionar el primero si hay métodos
+          if (vendorPaymentMethods.value.length > 0 && !selectedPayMethod.value) {
+            selectedPayMethod.value = vendorPaymentMethods.value[0].key;
+            selectedPayDetails.value = vendorPaymentMethods.value[0];
+          }
+          return;
+        } catch {}
+      }
+      // Si el vendedor no tiene métodos configurados, mostrar MP por defecto
+      vendorPaymentMethods.value = [{
+        key: 'mercadopago', label: 'Mercado Pago',
+        desc: 'Tarjeta de crédito, débito, cuotas',
+        icon: 'bi-credit-card', color: '#009ee3',
+        link: 'https://link.mercadopago.cl/mercadosordo',
+        recommended: true,
+      }];
+      selectedPayMethod.value  = 'mercadopago';
+    }
+
     const notifPrefs = ref([
       { key: 'email_orders',   label: 'Órdenes y compras',   desc: 'Confirmaciones, estados y actualizaciones de tus pedidos', value: true },
       { key: 'email_messages', label: 'Mensajes',             desc: 'Cuando recibes un mensaje de un comprador o vendedor', value: true },
@@ -2833,6 +3350,7 @@ const app = createApp({
     const checkoutLoading     = ref(false);
     const checkoutError       = ref('');
     const checkoutOrderId     = ref(null);
+    const checkoutAmount      = ref(0);
     const checkoutOrderNumber = ref('');
     const mpInitPoint         = ref('');
     const selectedAddressId   = ref(null);
@@ -2895,25 +3413,55 @@ const app = createApp({
       mpInitPoint.value     = '';
       bankPayUrl.value      = '';
       try {
-        // 1. Crear orden
-        const orderRes = await api('POST', '/orders/checkout', {
-          address_id:     selectedAddressId.value,
-          payment_method: selectedPayMethod.value,
-        });
-        checkoutOrderId.value     = orderRes.order_id;
-        checkoutOrderNumber.value = orderRes.order_number;
+        let currentOrderId = checkoutOrderId.value;
 
-        // 2. Crear pago según método
+        // 1. Crear orden SOLO si no existe ya una
+        if (!currentOrderId) {
+          const orderRes = await api('POST', '/orders/checkout', {
+            address_id:     selectedAddressId.value,
+            payment_method: selectedPayMethod.value,
+          });
+          currentOrderId                = orderRes.order_id;
+          checkoutOrderId.value         = orderRes.order_id;
+          checkoutAmount.value          = orderRes.total || cart.value.total;
+          checkoutOrderNumber.value     = orderRes.order_number;
+        }
+
+        if (!currentOrderId) throw { error: 'No se pudo crear la orden.' };
+
         if (selectedPayMethod.value === 'mercadopago') {
-          const mpRes = await api('POST', '/payments/mercadopago/create', { order_id: orderRes.order_id });
-          mpInitPoint.value = mpRes.init_point;
+          // Intentar crear preferencia API, sino usar link directo
+          try {
+            const mpRes = await api('POST', '/payments/mercadopago/create', { order_id: currentOrderId });
+            mpInitPoint.value = mpRes.init_point;
+          } catch {
+            // Fallback al link directo del vendedor
+            const vendorLink = selectedPayDetails.value?.link || 'https://link.mercadopago.cl/mercadosordo';
+            mpInitPoint.value = vendorLink;
+          }
+        } else if (selectedPayMethod.value === 'bank_transfer') {
+          try {
+            const bankRes = await api('POST', '/payments/bank-transfer/create', { order_id: currentOrderId });
+            bankPayUrl.value = bankRes.payment_url;
+          } catch {
+            // Sin API Khipu — mostrar datos bancarios del vendedor
+            bankPayUrl.value = null;
+            checkoutError.value = '';
+            // Mostrar instrucciones manuales
+            mpInitPoint.value = null;
+          }
         } else {
-          const bankRes = await api('POST', '/payments/bank-transfer/create', { order_id: orderRes.order_id });
-          bankPayUrl.value = bankRes.payment_url;
+          // wallet o custom — mostrar instrucciones del vendedor directamente
+          mpInitPoint.value = null;
+          bankPayUrl.value  = null;
         }
       } catch (e) {
-        checkoutError.value = e.error || 'Error al procesar el pago. Intenta nuevamente.';
-        checkoutOrderId.value = null;
+        // Si ya se creó la orden pero falló el pago, mostrar mensaje específico
+        if (checkoutOrderId.value) {
+          checkoutError.value = e.error || 'Orden creada pero hubo un error al iniciar el pago. Intenta desde Mis Compras.';
+        } else {
+          checkoutError.value = e.error || 'Error al procesar. Intenta nuevamente.';
+        }
       } finally {
         checkoutLoading.value = false;
       }
@@ -2921,8 +3469,10 @@ const app = createApp({
 
     function initCheckout() {
       checkoutStep.value      = 0;
+      loadVendorPaymentMethods();
       checkoutError.value     = '';
       mpInitPoint.value       = '';
+      checkoutAmount.value    = 0;
       bankPayUrl.value        = '';
       checkoutOrderId.value   = null;
       selectedPayMethod.value = 'mercadopago';
@@ -2988,9 +3538,9 @@ const app = createApp({
       if (view === 'home') loadProducts(true);
       if (view === 'products') loadProducts();
       if (view === 'cart') loadCart();
-      if (view === 'orders') loadOrders();
+      if (view === 'orders') { selectedOrder.value = null; loadOrders(); }
       if (view === 'my-products') { sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus(); }
-      if (view === 'profile')  { profileTab.value = 'data'; initProfileData(); loadAddresses(); }
+      if (view === 'profile')  { profileTab.value = 'data'; initProfileData(); loadAddresses(); loadPaymentMethods(); }
       if (view === 'checkout') { initCheckout(); loadAddresses(); }
       if (view === 'admin') { adminView.value = 'dashboard'; loadDashboard(); }
     }
@@ -3138,8 +3688,24 @@ const app = createApp({
     // ─── Orders ───────────────────────────────────────────
     async function loadOrders() {
       ordersLoading.value = true;
+      selectedOrder.value = null;
       try { orders.value = (await api('GET', '/orders')).data; } catch {}
       finally { ordersLoading.value = false; }
+    }
+
+    async function retryPayment(order) {
+      // Prellenar checkout con la orden existente
+      checkoutOrderId.value     = order.id;
+      checkoutOrderNumber.value = order.order_number;
+      checkoutStep.value        = 2;
+      selectedPayMethod.value   = order.payment_method || 'mercadopago';
+      navigate('checkout');
+    }
+
+    async function loadOrderDetail(id) {
+      try {
+        selectedOrder.value = await api('GET', `/orders/${id}`);
+      } catch { toast('Error al cargar el detalle.', 'error'); }
     }
 
     // ─── Admin ────────────────────────────────────────────
@@ -3177,7 +3743,7 @@ const app = createApp({
       navigate, doLogin, doRegister, logout,
       loadProducts, viewProduct, filterByCategory, doSearch, applyFilters, resetFilters, changePage,
       addToCart, updateCartItem, removeCartItem, toggleWishlist,
-      loadOrders, loadDashboard, loadAdminUsers, loadAdminProducts, loadAdminOrders,
+      loadOrders, loadOrderDetail, selectedOrder, retryPayment, loadDashboard, loadAdminUsers, loadAdminProducts, loadAdminOrders,
       profileTab, profileLoading, profileSuccess, profileErrors, profileData,
       pwdForm, pwdErrors, pwdSuccess, pwdStrength, showPwd,
       addresses, addressesLoading, addressForm, addressErrors,
@@ -3188,6 +3754,9 @@ const app = createApp({
       triggerAvatarUpload, onAvatarSelected, uploadAvatar, cancelAvatar,
       openAddressForm, saveAddress, setDefaultAddress, deleteAddress,
       savePrefs, doDeleteAccount, initProfileData,
+      paymentMethods, activePaymentMethods, paymentMethodsSaved,
+      savePaymentMethods, loadPaymentMethods, loadVendorPaymentMethods,
+      vendorPaymentMethods, selectedPayDetails, buildVendorMethods,
       sellerTab, myProducts, myProductsLoading, myProductSearch, myProductStatusFilter,
       productForm, productFormLoading, formErrors, filteredMyProducts, deleteConfirm,
       openProductForm, loadMyProducts, submitProductForm, toggleProductStatus,
@@ -3197,7 +3766,7 @@ const app = createApp({
       confirmDeleteProduct, doDeleteProduct, getCategoryName,
       updateAdminUser, updateOrderStatus,
       formatCLP, formatDate, statusBadge, statusLabel,
-      checkoutStep, checkoutLoading, checkoutError, checkoutOrderId,
+      checkoutStep, checkoutLoading, checkoutError, checkoutOrderId, checkoutAmount,
       checkoutOrderNumber, mpInitPoint, bankPayUrl, selectedAddressId, selectedPayMethod,
       mpStatus, connectMercadoPago, disconnectMercadoPago,
       bankStatus, openBankForm, bankForm, bankFormLoading, bankFormError,

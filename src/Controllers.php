@@ -39,6 +39,29 @@ class AuthController
         $user = Auth::attempt($data['email'], $data['password']);
         if (!$user) Response::json(['error' => 'Credenciales inválidas.'], 401);
         $token = Auth::createToken((int)$user['id']);
+
+        // Vincular carrito guest al usuario al hacer login
+        $sessionKey = $_COOKIE['ms_cart'] ?? null;
+        if ($sessionKey) {
+            $db = DB::getInstance();
+            $guestCart = $db->fetch("SELECT * FROM carts WHERE session_key=? AND user_id IS NULL AND expires_at > NOW()", [$sessionKey]);
+            if ($guestCart) {
+                // Verificar si ya tiene carrito con items
+                $userCart = $db->fetch("SELECT * FROM carts WHERE user_id=? AND expires_at > NOW()", [$user['id']]);
+                if ($userCart) {
+                    // Mover items del carrito guest al del usuario
+                    $db->query("UPDATE cart_items SET cart_id=? WHERE cart_id=?", [$userCart['id'], $guestCart['id']]);
+                    $db->delete('carts', 'id=?', [$guestCart['id']]);
+                } else {
+                    // Vincular el carrito guest al usuario
+                    $db->update('carts', [
+                        'user_id'    => $user['id'],
+                        'expires_at' => date('Y-m-d H:i:s', time() + 86400 * 30),
+                    ], 'id=?', [$guestCart['id']]);
+                }
+            }
+        }
+
         Response::json(['token' => $token, 'user' => $this->safeUser($user)]);
     }
 
@@ -379,10 +402,27 @@ class OrderController
     {
         $data = $req->validate(['address_id' => 'required|numeric', 'payment_method' => 'required']);
         $db   = DB::getInstance();
-        // Get cart
-        $cart  = $db->fetch("SELECT * FROM carts WHERE user_id=? AND expires_at > NOW()", [Auth::id()]);
+
+        // Buscar carrito por user_id primero
+        $cart = $db->fetch("SELECT * FROM carts WHERE user_id=? AND expires_at > NOW()", [Auth::id()]);
+
+        // Si no hay carrito por user_id, buscar por session_key (cookie) y vincular al usuario
+        if (!$cart) {
+            $sessionKey = $_COOKIE['ms_cart'] ?? null;
+            if ($sessionKey) {
+                $cart = $db->fetch("SELECT * FROM carts WHERE session_key=? AND expires_at > NOW()", [$sessionKey]);
+                if ($cart) {
+                    // Vincular al usuario autenticado
+                    $db->update('carts', [
+                        'user_id'    => Auth::id(),
+                        'expires_at' => date('Y-m-d H:i:s', time() + 86400 * 30),
+                    ], 'id=?', [$cart['id']]);
+                }
+            }
+        }
+
         $items = $db->fetchAll("SELECT ci.*, p.price, p.title, p.sku, p.seller_id, p.stock FROM cart_items ci JOIN products p ON p.id=ci.product_id WHERE ci.cart_id=?", [$cart['id'] ?? 0]);
-        if (empty($items)) Response::json(['error' => 'Carrito vacío.'], 422);
+        if (empty($items)) Response::json(['error' => 'Carrito vacío. Agrega productos antes de continuar.'], 422);
         $addr  = $db->fetch("SELECT * FROM user_addresses WHERE id=? AND user_id=?", [$data['address_id'], Auth::id()]);
         if (!$addr) Response::json(['error' => 'Dirección inválida.'], 422);
 
