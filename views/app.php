@@ -2796,59 +2796,300 @@
     <div class="flex-grow-1 p-4" style="background:var(--ms-bg); min-height:100vh">
       <!-- Dashboard -->
       <template v-if="adminView === 'dashboard'">
-        <h2 class="section-title mb-4">Dashboard</h2>
-        <div class="row g-3 mb-4">
-          <div class="col-6 col-lg-3">
-            <div class="stat-card">
-              <div class="text-muted small">Usuarios totales</div>
-              <div class="stat-value">{{ adminDash.users_total || 0 }}</div>
-              <small class="text-success">+{{ adminDash.users_today || 0 }} hoy</small>
-            </div>
-          </div>
-          <div class="col-6 col-lg-3">
+        <div class="d-flex align-items-center justify-content-between mb-4">
+          <h2 class="section-title mb-0"><i class="bi bi-speedometer2 me-2"></i>Dashboard</h2>
+          <span class="text-muted small"><i class="bi bi-clock me-1"></i>Actualizado ahora</span>
+        </div>
+
+        <!-- ── KPIs Fila 1: Ingresos ─────────────────────────────────── -->
+        <div class="row g-3 mb-3">
+          <div class="col-6 col-xl-3">
             <div class="stat-card green">
-              <div class="text-muted small">Ingresos hoy</div>
-              <div class="stat-value">{{ formatCLP(adminDash.revenue_today || 0) }}</div>
-              <small class="text-muted">{{ formatCLP(adminDash.revenue_month || 0) }} este mes</small>
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small fw-bold">INGRESOS TOTALES</div>
+                  <div class="stat-value">{{ formatCLP(adminDash.kpis?.revenue_total || 0) }}</div>
+                  <small class="text-success">{{ formatCLP(adminDash.kpis?.revenue_month || 0) }} este mes</small>
+                </div>
+                <div class="rounded-circle bg-success bg-opacity-10 d-flex align-items-center justify-content-center" style="width:44px;height:44px">
+                  <i class="bi bi-cash-stack text-success fs-5"></i>
+                </div>
+              </div>
+              <div class="mt-2 pt-2 border-top d-flex gap-3">
+                <div><div class="text-muted" style="font-size:.7rem">HOY</div><div class="fw-bold small text-success">{{ formatCLP(adminDash.kpis?.revenue_today || 0) }}</div></div>
+                <div><div class="text-muted" style="font-size:.7rem">SEMANA</div><div class="fw-bold small">{{ formatCLP(adminDash.kpis?.revenue_week || 0) }}</div></div>
+                <div><div class="text-muted" style="font-size:.7rem">COMISIÓN</div><div class="fw-bold small text-primary">{{ formatCLP(adminDash.kpis?.commission_total || 0) }}</div></div>
+              </div>
             </div>
           </div>
-          <div class="col-6 col-lg-3">
+          <div class="col-6 col-xl-3">
+            <div class="stat-card">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small fw-bold">ÓRDENES</div>
+                  <div class="stat-value">{{ adminDash.kpis?.orders_total || 0 }}</div>
+                  <small class="text-muted">{{ adminDash.kpis?.orders_week || 0 }} esta semana</small>
+                </div>
+                <div class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" style="width:44px;height:44px">
+                  <i class="bi bi-bag-check text-primary fs-5"></i>
+                </div>
+              </div>
+              <div class="mt-2 pt-2 border-top d-flex gap-3">
+                <div><div class="text-muted" style="font-size:.7rem">HOY</div><div class="fw-bold small">{{ adminDash.kpis?.orders_today || 0 }}</div></div>
+                <div><div class="text-muted" style="font-size:.7rem">PENDIENTES</div><div class="fw-bold small text-warning">{{ adminDash.kpis?.orders_pending || 0 }}</div></div>
+                <div><div class="text-muted" style="font-size:.7rem">DISPUTAS</div><div class="fw-bold small text-danger">{{ adminDash.kpis?.orders_dispute || 0 }}</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
             <div class="stat-card yellow">
-              <div class="text-muted small">Productos activos</div>
-              <div class="stat-value">{{ adminDash.products_total || 0 }}</div>
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small fw-bold">USUARIOS</div>
+                  <div class="stat-value">{{ adminDash.kpis?.users_total || 0 }}</div>
+                  <small class="text-muted">{{ adminDash.kpis?.sellers_total || 0 }} vendedores</small>
+                </div>
+                <div class="rounded-circle bg-warning bg-opacity-10 d-flex align-items-center justify-content-center" style="width:44px;height:44px">
+                  <i class="bi bi-people text-warning fs-5"></i>
+                </div>
+              </div>
+              <div class="mt-2 pt-2 border-top d-flex gap-3">
+                <div><div class="text-muted" style="font-size:.7rem">HOY</div><div class="fw-bold small text-success">+{{ adminDash.kpis?.users_today || 0 }}</div></div>
+                <div><div class="text-muted" style="font-size:.7rem">SEMANA</div><div class="fw-bold small">+{{ adminDash.kpis?.users_week || 0 }}</div></div>
+              </div>
             </div>
           </div>
-          <div class="col-6 col-lg-3">
-            <div class="stat-card red">
-              <div class="text-muted small">Órdenes hoy</div>
-              <div class="stat-value">{{ adminDash.orders_today || 0 }}</div>
+          <div class="col-6 col-xl-3">
+            <div class="stat-card">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small fw-bold">REPUTACIÓN</div>
+                  <div class="stat-value d-flex align-items-center gap-2">
+                    {{ adminDash.kpis?.avg_rating || '—' }}
+                    <i class="bi bi-star-fill text-warning" style="font-size:1rem"></i>
+                  </div>
+                  <small class="text-muted">{{ adminDash.kpis?.total_reviews || 0 }} reseñas</small>
+                </div>
+                <div class="rounded-circle bg-warning bg-opacity-10 d-flex align-items-center justify-content-center" style="width:44px;height:44px">
+                  <i class="bi bi-star-half text-warning fs-5"></i>
+                </div>
+              </div>
+              <!-- Rating dist -->
+              <div class="mt-2 pt-2 border-top">
+                <div v-for="r in (adminDash.rating_dist||[])" :key="r.rating" class="d-flex align-items-center gap-1 mb-1">
+                  <span style="font-size:.65rem;width:8px">{{ r.rating }}</span>
+                  <i class="bi bi-star-fill text-warning" style="font-size:.55rem"></i>
+                  <div class="flex-grow-1 bg-light rounded" style="height:5px">
+                    <div class="bg-warning rounded" :style="'height:5px;width:'+Math.min(100,(r.count/(adminDash.kpis?.total_reviews||1))*100)+'%'"></div>
+                  </div>
+                  <span style="font-size:.65rem;width:20px">{{ r.count }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-        <div class="row g-3">
+
+        <!-- ── Gráfico + Estados órdenes ─────────────────────────────── -->
+        <div class="row g-3 mb-3">
           <div class="col-md-8">
-            <div class="bg-white rounded p-4 shadow-sm">
-              <h6 class="fw-bold mb-3">Órdenes recientes</h6>
-              <table class="table table-sm">
-                <thead><tr><th>#</th><th>Comprador</th><th>Total</th><th>Estado</th></tr></thead>
-                <tbody>
-                  <tr v-for="o in adminDash.recent_orders" :key="o.id">
-                    <td class="fw-bold">{{ o.order_number }}</td>
-                    <td>{{ o.buyer }}</td>
-                    <td>{{ formatCLP(o.total) }}</td>
-                    <td><span class="badge" :class="statusBadge(o.status)">{{ statusLabel(o.status) }}</span></td>
-                  </tr>
-                </tbody>
-              </table>
+            <div class="bg-white rounded shadow-sm p-4">
+              <h6 class="fw-bold mb-3"><i class="bi bi-graph-up me-2 text-primary"></i>Ingresos últimos 30 días</h6>
+              <div v-if="!adminDash.revenue_chart?.length" class="text-center text-muted py-4 small">Sin datos suficientes aún</div>
+              <div v-else style="height:160px;position:relative">
+                <svg width="100%" height="160" :viewBox="'0 0 '+(adminDash.revenue_chart.length*30)+' 160'">
+                  <defs>
+                    <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#1B4F8A" stop-opacity="0.3"/>
+                      <stop offset="100%" stop-color="#1B4F8A" stop-opacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  <template v-if="adminDash.revenue_chart?.length">
+                    <polyline
+                      :points="adminDash.revenue_chart.map((d,i) => (i*30+15)+','+(140 - (d.total / Math.max(...adminDash.revenue_chart.map(x=>x.total))) * 120)).join(' ')"
+                      fill="none" stroke="#1B4F8A" stroke-width="2.5" stroke-linejoin="round"/>
+                    <circle v-for="(d,i) in adminDash.revenue_chart" :key="i"
+                      :cx="i*30+15" :cy="140 - (d.total / Math.max(...adminDash.revenue_chart.map(x=>x.total))) * 120"
+                      r="3" fill="#1B4F8A"/>
+                  </template>
+                </svg>
+              </div>
+              <div class="d-flex justify-content-between mt-1">
+                <span class="text-muted" style="font-size:.7rem">{{ adminDash.revenue_chart?.[0]?.date }}</span>
+                <span class="text-muted" style="font-size:.7rem">{{ adminDash.revenue_chart?.[adminDash.revenue_chart.length-1]?.date }}</span>
+              </div>
             </div>
           </div>
           <div class="col-md-4">
-            <div class="bg-white rounded p-4 shadow-sm">
-              <h6 class="fw-bold mb-3">Top Productos</h6>
-              <div v-for="(p,i) in adminDash.top_products" :key="i" class="d-flex justify-content-between mb-2">
-                <span class="small text-truncate" style="max-width:60%">{{ p.title }}</span>
-                <span class="badge bg-primary">{{ p.sales_count }} ventas</span>
+            <div class="bg-white rounded shadow-sm p-4 h-100">
+              <h6 class="fw-bold mb-3"><i class="bi bi-pie-chart me-2 text-primary"></i>Órdenes por estado</h6>
+              <div v-for="s in (adminDash.orders_by_status||[])" :key="s.status" class="mb-2">
+                <div class="d-flex justify-content-between mb-1">
+                  <span class="badge" :class="statusBadge(s.status)">{{ statusLabel(s.status) }}</span>
+                  <span class="fw-bold small">{{ s.count }}</span>
+                </div>
+                <div class="bg-light rounded" style="height:5px">
+                  <div class="rounded" :class="'bg-'+statusBadge(s.status).replace('bg-','').split(' ')[0]"
+                       :style="'height:5px;width:'+Math.min(100,(s.count/(adminDash.kpis?.orders_total||1))*100)+'%'"></div>
+                </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Top Vendedores + Compradores ──────────────────────────── -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <div class="bg-white rounded shadow-sm p-4">
+              <h6 class="fw-bold mb-3"><i class="bi bi-trophy me-2 text-warning"></i>Mejores vendedores</h6>
+              <div v-for="(s,i) in (adminDash.top_sellers||[])" :key="s.id" class="d-flex align-items-center gap-3 mb-3">
+                <div class="fw-bold text-muted" style="width:20px;font-size:.85rem">#{{ i+1 }}</div>
+                <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center flex-shrink-0"
+                     style="width:38px;height:38px;color:white;font-weight:700;font-size:.9rem">
+                  {{ s.name?.charAt(0) }}
+                </div>
+                <div class="flex-grow-1">
+                  <div class="fw-bold small">{{ s.name }}</div>
+                  <div class="text-muted" style="font-size:.73rem">
+                    {{ s.products_count }} productos · {{ s.total_sales }} ventas
+                  </div>
+                </div>
+                <div class="text-end">
+                  <div class="fw-bold small text-success">{{ formatCLP(s.total_revenue) }}</div>
+                  <div class="text-muted" style="font-size:.7rem">
+                    <i class="bi bi-star-fill text-warning" style="font-size:.6rem"></i>
+                    {{ s.avg_rating || '—' }}
+                  </div>
+                </div>
+              </div>
+              <div v-if="!adminDash.top_sellers?.length" class="text-center text-muted small py-3">Sin datos aún</div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="bg-white rounded shadow-sm p-4">
+              <h6 class="fw-bold mb-3"><i class="bi bi-award me-2 text-primary"></i>Mejores compradores</h6>
+              <div v-for="(b,i) in (adminDash.top_buyers||[])" :key="b.id" class="d-flex align-items-center gap-3 mb-3">
+                <div class="fw-bold text-muted" style="width:20px;font-size:.85rem">#{{ i+1 }}</div>
+                <div class="rounded-circle bg-success d-flex align-items-center justify-content-center flex-shrink-0"
+                     style="width:38px;height:38px;color:white;font-weight:700;font-size:.9rem">
+                  {{ b.name?.charAt(0) }}
+                </div>
+                <div class="flex-grow-1">
+                  <div class="fw-bold small">{{ b.name }}</div>
+                  <div class="text-muted" style="font-size:.73rem">{{ b.orders_count }} órdenes</div>
+                </div>
+                <div class="fw-bold small text-primary">{{ formatCLP(b.total_spent) }}</div>
+              </div>
+              <div v-if="!adminDash.top_buyers?.length" class="text-center text-muted small py-3">Sin datos aún</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Top Productos más vendidos + más vistos ───────────────── -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <div class="bg-white rounded shadow-sm p-4">
+              <h6 class="fw-bold mb-3"><i class="bi bi-fire me-2 text-danger"></i>Productos más vendidos</h6>
+              <div v-for="(p,i) in (adminDash.top_selling||[])" :key="p.id"
+                   class="d-flex align-items-center gap-3 mb-2 pb-2 border-bottom">
+                <span class="fw-bold text-muted" style="width:20px;font-size:.8rem">#{{i+1}}</span>
+                <img :src="p.image||'/uploads/no-image.png'"
+                     style="width:40px;height:40px;object-fit:contain;background:#f0f4fb;border-radius:6px">
+                <div class="flex-grow-1 overflow-hidden">
+                  <div class="fw-bold small text-truncate">{{ p.title }}</div>
+                  <div class="text-muted" style="font-size:.72rem">
+                    <i class="bi bi-shop me-1"></i>{{ p.seller_name }}
+                    · <i class="bi bi-star-fill text-warning" style="font-size:.6rem"></i> {{ p.rating_avg || '—' }}
+                  </div>
+                </div>
+                <div class="text-end flex-shrink-0">
+                  <div class="fw-bold small text-primary">{{ formatCLP(p.price) }}</div>
+                  <div class="badge bg-danger" style="font-size:.65rem">{{ p.sales_count }} ventas</div>
+                </div>
+              </div>
+              <div v-if="!adminDash.top_selling?.length" class="text-center text-muted small py-3">Sin datos aún</div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="bg-white rounded shadow-sm p-4">
+              <h6 class="fw-bold mb-3"><i class="bi bi-eye me-2 text-info"></i>Productos más vistos</h6>
+              <div v-for="(p,i) in (adminDash.top_viewed||[])" :key="p.id"
+                   class="d-flex align-items-center gap-3 mb-2 pb-2 border-bottom">
+                <span class="fw-bold text-muted" style="width:20px;font-size:.8rem">#{{i+1}}</span>
+                <img :src="p.image||'/uploads/no-image.png'"
+                     style="width:40px;height:40px;object-fit:contain;background:#f0f4fb;border-radius:6px">
+                <div class="flex-grow-1 overflow-hidden">
+                  <div class="fw-bold small text-truncate">{{ p.title }}</div>
+                  <div class="text-muted" style="font-size:.72rem">
+                    <i class="bi bi-shop me-1"></i>{{ p.seller_name }}
+                  </div>
+                </div>
+                <div class="text-end flex-shrink-0">
+                  <div class="fw-bold small text-primary">{{ formatCLP(p.price) }}</div>
+                  <div class="badge bg-info text-white" style="font-size:.65rem">
+                    <i class="bi bi-eye-fill me-1"></i>{{ p.views }}
+                  </div>
+                </div>
+              </div>
+              <div v-if="!adminDash.top_viewed?.length" class="text-center text-muted small py-3">Sin datos aún</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Favoritos + Categorías + Órdenes recientes ────────────── -->
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="bg-white rounded shadow-sm p-4">
+              <h6 class="fw-bold mb-3"><i class="bi bi-heart me-2 text-danger"></i>Más agregados a favoritos</h6>
+              <div v-for="(p,i) in (adminDash.top_favorites||[])" :key="p.id"
+                   class="d-flex align-items-center gap-2 mb-2">
+                <span class="fw-bold text-muted" style="width:16px;font-size:.75rem">#{{i+1}}</span>
+                <img :src="p.image||'/uploads/no-image.png'"
+                     style="width:34px;height:34px;object-fit:contain;background:#f0f4fb;border-radius:6px">
+                <div class="flex-grow-1 overflow-hidden">
+                  <div class="small text-truncate fw-bold">{{ p.title }}</div>
+                  <div class="text-muted" style="font-size:.7rem">{{ formatCLP(p.price) }}</div>
+                </div>
+                <span class="badge bg-danger bg-opacity-10 text-danger" style="font-size:.65rem">
+                  <i class="bi bi-heart-fill me-1"></i>{{ p.wishlist_count || 0 }}
+                </span>
+              </div>
+              <div v-if="!adminDash.top_favorites?.length" class="text-center text-muted small py-3">Sin datos aún</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="bg-white rounded shadow-sm p-4">
+              <h6 class="fw-bold mb-3"><i class="bi bi-tags me-2 text-primary"></i>Categorías más activas</h6>
+              <div v-for="cat in (adminDash.top_categories||[])" :key="cat.name" class="mb-2">
+                <div class="d-flex justify-content-between mb-1">
+                  <span class="small fw-bold">{{ cat.name }}</span>
+                  <span class="small text-muted">{{ cat.sales }} ventas</span>
+                </div>
+                <div class="bg-light rounded" style="height:6px">
+                  <div class="bg-primary rounded" style="height:6px;transition:width .5s"
+                       :style="'width:'+Math.min(100,(cat.sales/Math.max(...(adminDash.top_categories||[{sales:1}]).map(c=>c.sales||1)))*100)+'%'">
+                  </div>
+                </div>
+              </div>
+              <div v-if="!adminDash.top_categories?.length" class="text-center text-muted small py-3">Sin datos aún</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="bg-white rounded shadow-sm p-4">
+              <h6 class="fw-bold mb-3"><i class="bi bi-clock-history me-2 text-primary"></i>Actividad reciente</h6>
+              <div v-for="o in (adminDash.recent_orders||[])" :key="o.order_number"
+                   class="d-flex justify-content-between align-items-start mb-2 pb-2 border-bottom">
+                <div>
+                  <div class="fw-bold" style="font-size:.78rem">{{ o.order_number }}</div>
+                  <div class="text-muted" style="font-size:.7rem">{{ o.buyer_name }}</div>
+                </div>
+                <div class="text-end">
+                  <div class="fw-bold small">{{ formatCLP(o.total) }}</div>
+                  <span class="badge" :class="statusBadge(o.status)" style="font-size:.6rem">
+                    {{ statusLabel(o.status) }}
+                  </span>
+                </div>
+              </div>
+              <div v-if="!adminDash.recent_orders?.length" class="text-center text-muted small py-3">Sin órdenes aún</div>
             </div>
           </div>
         </div>
@@ -4236,7 +4477,10 @@ const app = createApp({
 
     // ─── Admin ────────────────────────────────────────────
     async function loadDashboard() {
-      try { adminDash.value = await api('GET', '/admin/dashboard'); } catch {}
+      try {
+        const r = await api('GET', '/admin/dashboard');
+        adminDash.value = r;
+      } catch {}
     }
     async function loadAdminUsers() {
       try { adminUsers.value = (await api('GET', `/admin/users?q=${adminSearch.value}`)).data; } catch {}

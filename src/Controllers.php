@@ -481,19 +481,154 @@ class AdminController
 {
     public function dashboard(Request $req): void
     {
-        $db   = DB::getInstance();
-        $data = [
-            'users_total'    => $db->fetch("SELECT COUNT(*) AS c FROM users")['c'],
-            'users_today'    => $db->fetch("SELECT COUNT(*) AS c FROM users WHERE DATE(created_at)=CURDATE()")['c'],
-            'products_total' => $db->fetch("SELECT COUNT(*) AS c FROM products WHERE status != 'deleted'")['c'],
-            'orders_today'   => $db->fetch("SELECT COUNT(*) AS c FROM orders WHERE DATE(created_at)=CURDATE()")['c'],
-            'revenue_today'  => $db->fetch("SELECT IFNULL(SUM(total),0) AS r FROM orders WHERE DATE(created_at)=CURDATE() AND status NOT IN ('cancelled','refunded')")['r'],
-            'revenue_month'  => $db->fetch("SELECT IFNULL(SUM(total),0) AS r FROM orders WHERE YEAR(created_at)=YEAR(NOW()) AND MONTH(created_at)=MONTH(NOW()) AND status NOT IN ('cancelled','refunded')")['r'],
-            'recent_orders'  => $db->fetchAll("SELECT o.*, u.name AS buyer FROM orders o JOIN users u ON u.id=o.buyer_id ORDER BY o.created_at DESC LIMIT 10"),
-            'top_products'   => $db->fetchAll("SELECT p.title, p.sales_count, p.price FROM products p ORDER BY p.sales_count DESC LIMIT 10"),
-            'revenue_chart'  => $db->fetchAll("SELECT DATE(created_at) AS date, SUM(total) AS total FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) GROUP BY DATE(created_at) ORDER BY date"),
-        ];
-        Response::json($data);
+        $db = DB::getInstance();
+
+        // ── KPIs principales ──────────────────────────────────────────────
+        $usersTotal    = (int)$db->fetch("SELECT COUNT(*) AS c FROM users WHERE status != 'suspended'")['c'];
+        $usersToday    = (int)$db->fetch("SELECT COUNT(*) AS c FROM users WHERE DATE(created_at)=CURDATE()")['c'];
+        $usersWeek     = (int)$db->fetch("SELECT COUNT(*) AS c FROM users WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")['c'];
+        $sellersTotal  = (int)$db->fetch("SELECT COUNT(*) AS c FROM users WHERE role IN ('seller','admin')")['c'];
+        $productsTotal = (int)$db->fetch("SELECT COUNT(*) AS c FROM products WHERE status='active'")['c'];
+        $ordersTotal   = (int)$db->fetch("SELECT COUNT(*) AS c FROM orders WHERE status NOT IN ('cancelled')")['c'];
+        $ordersToday   = (int)$db->fetch("SELECT COUNT(*) AS c FROM orders WHERE DATE(created_at)=CURDATE()")['c'];
+        $ordersWeek    = (int)$db->fetch("SELECT COUNT(*) AS c FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) AND status NOT IN ('cancelled')")['c'];
+        $ordersPending = (int)$db->fetch("SELECT COUNT(*) AS c FROM orders WHERE status='paid'")['c'];
+        $ordersDispute = (int)$db->fetch("SELECT COUNT(*) AS c FROM orders WHERE status='dispute'")['c'];
+
+        // ── Revenue ───────────────────────────────────────────────────────
+        $revenueToday  = (float)$db->fetch("SELECT IFNULL(SUM(total),0) AS r FROM orders WHERE DATE(created_at)=CURDATE() AND status NOT IN ('cancelled','refunded')")['r'];
+        $revenueWeek   = (float)$db->fetch("SELECT IFNULL(SUM(total),0) AS r FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) AND status NOT IN ('cancelled','refunded')")['r'];
+        $revenueMonth  = (float)$db->fetch("SELECT IFNULL(SUM(total),0) AS r FROM orders WHERE YEAR(created_at)=YEAR(NOW()) AND MONTH(created_at)=MONTH(NOW()) AND status NOT IN ('cancelled','refunded')")['r'];
+        $revenueTotal  = (float)$db->fetch("SELECT IFNULL(SUM(total),0) AS r FROM orders WHERE status IN ('paid','processing','dispatched','completed')")['r'];
+        $commTotal     = round($revenueTotal * 0.05, 2);
+
+        // ── Órdenes por estado ────────────────────────────────────────────
+        $ordersByStatus = $db->fetchAll(
+            "SELECT status, COUNT(*) AS count FROM orders GROUP BY status ORDER BY count DESC"
+        );
+
+        // ── Gráfico ingresos 30 días ──────────────────────────────────────
+        $revenueChart = $db->fetchAll(
+            "SELECT DATE(created_at) AS date, SUM(total) AS total, COUNT(*) AS orders
+             FROM orders
+             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+               AND status NOT IN ('cancelled','refunded')
+             GROUP BY DATE(created_at) ORDER BY date"
+        );
+
+        // ── Top productos más vendidos ────────────────────────────────────
+        $topSelling = $db->fetchAll(
+            "SELECT p.id, p.title, p.price, p.sales_count, p.views, p.rating_avg, p.rating_count,
+                    pi.url AS image, u.name AS seller_name,
+                    IFNULL(p.sales_count * p.price, 0) AS revenue
+             FROM products p
+             LEFT JOIN product_images pi ON pi.product_id=p.id AND pi.is_primary=1
+             LEFT JOIN users u ON u.id=p.seller_id
+             WHERE p.status='active'
+             ORDER BY p.sales_count DESC LIMIT 8"
+        );
+
+        // ── Top productos más vistos ──────────────────────────────────────
+        $topViewed = $db->fetchAll(
+            "SELECT p.id, p.title, p.price, p.views, p.sales_count, p.rating_avg,
+                    pi.url AS image, u.name AS seller_name
+             FROM products p
+             LEFT JOIN product_images pi ON pi.product_id=p.id AND pi.is_primary=1
+             LEFT JOIN users u ON u.id=p.seller_id
+             WHERE p.status='active'
+             ORDER BY p.views DESC LIMIT 8"
+        );
+
+        // ── Top favoritos (wishlists) ─────────────────────────────────────
+        $topFavorites = $db->fetchAll(
+            "SELECT p.id, p.title, p.price, COUNT(w.id) AS wishlist_count,
+                    pi.url AS image
+             FROM products p
+             LEFT JOIN wishlists w ON w.product_id=p.id
+             LEFT JOIN product_images pi ON pi.product_id=p.id AND pi.is_primary=1
+             WHERE p.status='active'
+             GROUP BY p.id ORDER BY wishlist_count DESC LIMIT 6"
+        );
+
+        // ── Mejores vendedores ────────────────────────────────────────────
+        $topSellers = $db->fetchAll(
+            "SELECT u.id, u.name, u.avatar,
+                    COUNT(DISTINCT p.id) AS products_count,
+                    IFNULL(SUM(oi.quantity),0) AS total_sales,
+                    IFNULL(SUM(oi.subtotal),0) AS total_revenue,
+                    ROUND(AVG(p.rating_avg),2) AS avg_rating
+             FROM users u
+             LEFT JOIN products p ON p.seller_id=u.id AND p.status='active'
+             LEFT JOIN order_items oi ON oi.seller_id=u.id
+             WHERE u.role IN ('seller','admin')
+             GROUP BY u.id ORDER BY total_sales DESC LIMIT 6"
+        );
+
+        // ── Mejores compradores ───────────────────────────────────────────
+        $topBuyers = $db->fetchAll(
+            "SELECT u.id, u.name, u.avatar,
+                    COUNT(DISTINCT o.id) AS orders_count,
+                    IFNULL(SUM(o.total),0) AS total_spent
+             FROM users u
+             LEFT JOIN orders o ON o.buyer_id=u.id AND o.status NOT IN ('cancelled','refunded')
+             WHERE u.role='buyer'
+             GROUP BY u.id ORDER BY total_spent DESC LIMIT 6"
+        );
+
+        // ── Reputación global ─────────────────────────────────────────────
+        $avgRating    = (float)($db->fetch("SELECT ROUND(AVG(rating),2) AS r FROM reviews WHERE status='approved'")['r'] ?? 0);
+        $totalReviews = (int)$db->fetch("SELECT COUNT(*) AS c FROM reviews WHERE status='approved'")['c'];
+        $ratingDist   = $db->fetchAll(
+            "SELECT rating, COUNT(*) AS count FROM reviews WHERE status='approved' GROUP BY rating ORDER BY rating DESC"
+        );
+
+        // ── Actividad reciente ────────────────────────────────────────────
+        $recentOrders = $db->fetchAll(
+            "SELECT o.order_number, o.total, o.status, o.created_at,
+                    u.name AS buyer_name
+             FROM orders o JOIN users u ON u.id=o.buyer_id
+             ORDER BY o.created_at DESC LIMIT 10"
+        );
+
+        // ── Categorías más activas ────────────────────────────────────────
+        $topCategories = $db->fetchAll(
+            "SELECT c.name, COUNT(p.id) AS products, IFNULL(SUM(p.sales_count),0) AS sales
+             FROM categories c
+             LEFT JOIN products p ON p.category_id=c.id AND p.status='active'
+             GROUP BY c.id ORDER BY sales DESC LIMIT 8"
+        );
+
+        Response::json([
+            'kpis' => [
+                'users_total'    => $usersTotal,
+                'users_today'    => $usersToday,
+                'users_week'     => $usersWeek,
+                'sellers_total'  => $sellersTotal,
+                'products_total' => $productsTotal,
+                'orders_total'   => $ordersTotal,
+                'orders_today'   => $ordersToday,
+                'orders_week'    => $ordersWeek,
+                'orders_pending' => $ordersPending,
+                'orders_dispute' => $ordersDispute,
+                'revenue_today'  => $revenueToday,
+                'revenue_week'   => $revenueWeek,
+                'revenue_month'  => $revenueMonth,
+                'revenue_total'  => $revenueTotal,
+                'commission_total' => $commTotal,
+                'avg_rating'     => $avgRating,
+                'total_reviews'  => $totalReviews,
+            ],
+            'orders_by_status' => $ordersByStatus,
+            'revenue_chart'    => $revenueChart,
+            'top_selling'      => $topSelling,
+            'top_viewed'       => $topViewed,
+            'top_favorites'    => $topFavorites,
+            'top_sellers'      => $topSellers,
+            'top_buyers'       => $topBuyers,
+            'rating_dist'      => $ratingDist,
+            'recent_orders'    => $recentOrders,
+            'top_categories'   => $topCategories,
+        ]);
     }
 
     public function users(Request $req): void
