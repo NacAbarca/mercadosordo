@@ -11,29 +11,29 @@
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
 
   <style>
     :root {
-      --ms-yellow: #FFE600;
-      --ms-yellow-dark: #F0D800;
-      --ms-blue: #3483FA;
-      --ms-blue-dark: #2968C8;
+      --ms-yellow: #F4C430;
+      --ms-yellow-dark: #C9991A;
+      --ms-blue: #1B4F8A;
+      --ms-blue-dark: #0E3060;
       --ms-green: #00A650;
-      --ms-text: #1A1A2E;
-      --ms-muted: #666;
-      --ms-border: #e8e8e8;
-      --ms-bg: #EDEDED;
+      --ms-text: #0A1628;
+      --ms-muted: #5A7099;
+      --ms-border: #D6E4F0;
+      --ms-bg: #EBF2FB;
       --ms-card: #ffffff;
       --ms-radius: 8px;
-      --ms-shadow: 0 1px 4px rgba(0,0,0,.12);
-      --ms-shadow-hover: 0 4px 16px rgba(0,0,0,.16);
+      --ms-shadow: 0 1px 4px rgba(11,30,60,.10);
+      --ms-shadow-hover: 0 4px 16px rgba(11,30,60,.16);
     }
 
     * { box-sizing: border-box; }
 
     body {
-      font-family: 'Nunito', sans-serif;
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
       background: var(--ms-bg);
       color: var(--ms-text);
       min-height: 100vh;
@@ -41,7 +41,7 @@
 
     /* ─── NAVBAR ─── */
     .navbar-ms {
-      background: var(--ms-yellow);
+      background: var(--ms-blue);
       padding: 10px 0;
       position: sticky; top: 0; z-index: 1040;
       box-shadow: 0 2px 8px rgba(0,0,0,.1);
@@ -50,10 +50,10 @@
       font-family: 'Sora', sans-serif;
       font-weight: 800;
       font-size: 1.5rem;
-      color: var(--ms-text);
+      color: #ffffff;
       text-decoration: none;
     }
-    .navbar-ms .brand span { color: var(--ms-blue); }
+    .navbar-ms .brand span { color: var(--ms-yellow); }
 
     .search-bar { flex: 1; max-width: 600px; position: relative; }
     .search-bar input {
@@ -67,17 +67,18 @@
     }
     .search-bar button {
       border-radius: 0 4px 4px 0;
-      background: var(--ms-blue);
-      color: white;
+      background: var(--ms-yellow);
+      color: var(--ms-blue-dark);
       border: none;
       padding: 10px 18px;
       cursor: pointer;
       transition: background .2s;
+      font-weight: 700;
     }
-    .search-bar button:hover { background: var(--ms-blue-dark); }
+    .search-bar button:hover { background: var(--ms-yellow-dark); }
 
     .navbar-actions a, .navbar-actions button {
-      color: var(--ms-text);
+      color: rgba(255,255,255,.85);
       text-decoration: none;
       font-size: .85rem;
       font-weight: 600;
@@ -88,7 +89,7 @@
       border-radius: 4px;
       transition: background .15s;
     }
-    .navbar-actions a:hover, .navbar-actions button:hover { background: rgba(0,0,0,.07); }
+    .navbar-actions a:hover, .navbar-actions button:hover { background: rgba(255,255,255,.12); }
     .navbar-actions i { font-size: 1.3rem; }
     .cart-badge {
       background: var(--ms-blue); color: white;
@@ -100,8 +101,8 @@
 
     /* ─── CATEGORIES NAV ─── */
     .cat-nav {
-      background: white;
-      border-bottom: 1px solid var(--ms-border);
+      background: var(--ms-blue-dark);
+      border-bottom: 2px solid var(--ms-yellow);
       overflow-x: auto;
     }
     .cat-nav::-webkit-scrollbar { height: 0; }
@@ -112,13 +113,13 @@
     .cat-nav a {
       display: flex; align-items: center; gap: 6px;
       padding: 10px 16px;
-      font-size: .85rem; font-weight: 600; color: var(--ms-text);
-      text-decoration: none; border-bottom: 2px solid transparent;
+      font-size: .85rem; font-weight: 600; color: rgba(255,255,255,.7);
+      text-decoration: none; border-bottom: 3px solid transparent;
       transition: all .15s;
     }
     .cat-nav a:hover, .cat-nav a.active {
-      color: var(--ms-blue);
-      border-bottom-color: var(--ms-blue);
+      color: var(--ms-yellow);
+      border-bottom-color: var(--ms-yellow);
     }
 
     /* ─── HERO BANNER ─── */
@@ -322,7 +323,7 @@
     text-align: center;
     padding: 14px 16px;
     font-size: .78rem;
-    font-family: 'Nunito', sans-serif;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
     letter-spacing: .3px;
     margin-top: auto;
   }
