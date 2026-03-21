@@ -1475,23 +1475,27 @@ class OrderManagementController
         $db     = DB::getInstance();
         $page   = (int)$req->input('page', 1);
         $status = $req->input('status', '');
-        $sql    = "SELECT o.*,
+        // Buscar por seller_id en orders O por seller_id en order_items
+        $sql    = "SELECT DISTINCT o.*,
                     u.name AS buyer_name, u.email AS buyer_email, u.rut AS buyer_rut,
                     (SELECT COUNT(*) FROM order_items WHERE order_id=o.id) AS items_count
                    FROM orders o
                    JOIN users u ON u.id = o.buyer_id
-                   WHERE o.seller_id = ?";
-        $bindings = [Auth::id()];
+                   WHERE (o.seller_id = ? OR EXISTS (
+                       SELECT 1 FROM order_items oi2
+                       WHERE oi2.order_id = o.id AND oi2.seller_id = ?
+                   ))";
+        $bindings = [Auth::id(), Auth::id()];
         if ($status) { $sql .= " AND o.status = ?"; $bindings[] = $status; }
         $sql .= " ORDER BY o.created_at DESC";
         $result = $db->paginate($sql, $bindings, $page);
-        // Agregar desglose financiero a cada orden
         foreach ($result['data'] as &$order) {
             $fin = $this->calcFinancials((float)$order['total']);
             $order['financials'] = $fin;
             $order['items'] = $db->fetchAll(
-                "SELECT oi.*, pi.url AS image FROM order_items oi
-                 LEFT JOIN product_images pi ON pi.product_id=oi.product_id AND pi.is_primary=1
+                "SELECT oi.*,
+                  (SELECT url FROM product_images WHERE product_id=oi.product_id AND is_primary=1 LIMIT 1) AS image
+                 FROM order_items oi
                  WHERE oi.order_id=? AND oi.seller_id=?",
                 [$order['id'], Auth::id()]
             );
@@ -1508,11 +1512,13 @@ class OrderManagementController
             "SELECT o.*, u.name AS buyer_name, u.email AS buyer_email,
                     u.rut AS buyer_rut, u.phone AS buyer_phone
              FROM orders o JOIN users u ON u.id=o.buyer_id
-             WHERE o.id=? AND o.seller_id=?",
-            [$id, Auth::id()]
+             WHERE o.id=? AND (o.seller_id=? OR EXISTS(
+                 SELECT 1 FROM order_items oi WHERE oi.order_id=o.id AND oi.seller_id=?
+             ))",
+            [$id, Auth::id(), Auth::id()]
         );
         if (!$order) Response::json(['error' => 'Orden no encontrada.'], 404);
-        $order['items']         = $db->fetchAll("SELECT oi.*, pi.url AS image FROM order_items oi LEFT JOIN product_images pi ON pi.product_id=oi.product_id AND pi.is_primary=1 WHERE oi.order_id=? AND oi.seller_id=?", [$id, Auth::id()]);
+        $order['items']         = $db->fetchAll("SELECT oi.*, (SELECT url FROM product_images WHERE product_id=oi.product_id AND is_primary=1 LIMIT 1) AS image FROM order_items oi WHERE oi.order_id=? AND oi.seller_id=?", [$id, Auth::id()]);
         $order['tracking']      = $db->fetchAll("SELECT * FROM order_tracking WHERE order_id=? ORDER BY created_at ASC", [$id]);
         $order['confirmations'] = $db->fetchAll("SELECT oc.*, u.name AS confirmed_by_name FROM order_confirmations oc LEFT JOIN users u ON u.id=oc.confirmed_by WHERE oc.order_id=? ORDER BY oc.confirmed_at ASC", [$id]);
         $order['messages']      = $db->fetchAll("SELECT om.*, u.name AS sender_name, u.avatar AS sender_avatar FROM order_messages om JOIN users u ON u.id=om.sender_id WHERE om.order_id=? ORDER BY om.created_at ASC", [$id]);
@@ -1526,7 +1532,7 @@ class OrderManagementController
     {
         $id = (int)$req->param('id');
         $db = DB::getInstance();
-        $order = $db->fetch("SELECT * FROM orders WHERE id=? AND seller_id=?", [$id, Auth::id()]);
+        $order = $db->fetch("SELECT * FROM orders WHERE id=? AND (seller_id=? OR EXISTS(SELECT 1 FROM order_items oi WHERE oi.order_id=orders.id AND oi.seller_id=?))", [$id, Auth::id(), Auth::id()]);
         if (!$order) Response::json(['error' => 'Orden no encontrada.'], 404);
         if ($order['status'] !== 'paid') Response::json(['error' => 'Solo puedes aceptar órdenes pagadas.'], 400);
         $db->beginTransaction();
@@ -1545,7 +1551,7 @@ class OrderManagementController
     {
         $id = (int)$req->param('id');
         $db = DB::getInstance();
-        $order = $db->fetch("SELECT * FROM orders WHERE id=? AND seller_id=?", [$id, Auth::id()]);
+        $order = $db->fetch("SELECT * FROM orders WHERE id=? AND (seller_id=? OR EXISTS(SELECT 1 FROM order_items oi WHERE oi.order_id=orders.id AND oi.seller_id=?))", [$id, Auth::id(), Auth::id()]);
         if (!$order) Response::json(['error' => 'Orden no encontrada.'], 404);
         if ($order['status'] !== 'processing') Response::json(['error' => 'Debes aceptar la orden primero.'], 400);
         $tracking   = $req->input('tracking_number');
@@ -1594,7 +1600,12 @@ class OrderManagementController
         $id     = (int)$req->param('id');
         $db     = DB::getInstance();
         $userId = Auth::id();
-        $order  = $db->fetch("SELECT * FROM orders WHERE id=? AND (buyer_id=? OR seller_id=?)", [$id, $userId, $userId]);
+        $order  = $db->fetch(
+            "SELECT * FROM orders WHERE id=? AND (
+                buyer_id=? OR seller_id=? OR
+                EXISTS(SELECT 1 FROM order_items oi WHERE oi.order_id=orders.id AND oi.seller_id=?)
+            )", [$id, $userId, $userId, $userId]
+        );
         if (!$order) Response::json(['error' => 'Orden no encontrada.'], 404);
         if (in_array($order['status'], ['completed','refunded','cancelled'])) Response::json(['error' => 'No se puede cancelar esta orden.'], 400);
         $db->beginTransaction();
@@ -1669,10 +1680,18 @@ class OrderManagementController
     {
         $id    = (int)$req->param('id');
         $db    = DB::getInstance();
-        $order = $db->fetch("SELECT * FROM orders WHERE id=? AND (buyer_id=? OR seller_id=?)", [$id, Auth::id(), Auth::id()]);
+        $order = $db->fetch(
+            "SELECT * FROM orders WHERE id=? AND (
+                buyer_id=? OR seller_id=? OR
+                EXISTS(SELECT 1 FROM order_items oi WHERE oi.order_id=orders.id AND oi.seller_id=?)
+            )", [$id, Auth::id(), Auth::id(), Auth::id()]
+        );
         if (!$order) Response::json(['error' => 'No autorizado.'], 403);
-        $msgs = $db->fetchAll("SELECT om.*, u.name AS sender_name, u.avatar AS sender_avatar FROM order_messages om JOIN users u ON u.id=om.sender_id WHERE om.order_id=? ORDER BY om.created_at ASC", [$id]);
-        // Marcar como leídos
+        $msgs = $db->fetchAll(
+            "SELECT om.*, u.name AS sender_name, u.avatar AS sender_avatar
+             FROM order_messages om JOIN users u ON u.id=om.sender_id
+             WHERE om.order_id=? ORDER BY om.created_at ASC", [$id]
+        );
         $db->query("UPDATE order_messages SET read_at=NOW() WHERE order_id=? AND sender_id != ? AND read_at IS NULL", [$id, Auth::id()]);
         Response::json(['messages' => $msgs, 'order_number' => $order['order_number']]);
     }
@@ -1682,7 +1701,12 @@ class OrderManagementController
         $id   = (int)$req->param('id');
         $db   = DB::getInstance();
         $data = $req->validate(['message' => 'required|min:1']);
-        $order = $db->fetch("SELECT * FROM orders WHERE id=? AND (buyer_id=? OR seller_id=?)", [$id, Auth::id(), Auth::id()]);
+        $order = $db->fetch(
+            "SELECT * FROM orders WHERE id=? AND (
+                buyer_id=? OR seller_id=? OR
+                EXISTS(SELECT 1 FROM order_items oi WHERE oi.order_id=orders.id AND oi.seller_id=?)
+            )", [$id, Auth::id(), Auth::id(), Auth::id()]
+        );
         if (!$order) Response::json(['error' => 'No autorizado.'], 403);
         $msgId = $db->insert('order_messages', ['order_id' => $id, 'sender_id' => Auth::id(), 'message' => trim($data['message']), 'type' => 'text']);
         // Notificar al otro
