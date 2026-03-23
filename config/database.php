@@ -1,22 +1,11 @@
 <?php
-// ============================================================
-// config/database.php
-// Lee desde variables de entorno (.env) o usa defaults locales
-// ============================================================
-
-function _env(string $key, mixed $default = null): mixed
-{
-    $v = $_ENV[$key] ?? getenv($key);
-    return ($v !== false && $v !== null && $v !== '') ? $v : $default;
-}
-
+// Railway usa variables de entorno para la DB
 return [
-    'driver'   => 'mysql',
-    'host'     => _env('DB_HOST', '127.0.0.1'),
-    'port'     => (int) _env('DB_PORT', 3306),
-    'database' => _env('DB_NAME', 'mercadosordo'),
-    'username' => _env('DB_USER', 'root'),
-    'password' => _env('DB_PASS', ''),
+    'host'     => getenv('MYSQLHOST')     ?: getenv('DB_HOST')     ?: '127.0.0.1',
+    'port'     => getenv('MYSQLPORT')     ?: getenv('DB_PORT')     ?: '3306',
+    'database' => getenv('MYSQLDATABASE') ?: getenv('DB_NAME')     ?: 'mercadosordo',
+    'username' => getenv('MYSQLUSER')     ?: getenv('DB_USER')     ?: 'root',
+    'password' => getenv('MYSQLPASSWORD') ?: getenv('DB_PASS')     ?: '',
     'charset'  => 'utf8mb4',
     'options'  => [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,

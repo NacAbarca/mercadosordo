@@ -1,3 +1,18 @@
+# Entorno
+.env
 .DS_Store
-public/uploads/avatars/
-public/uploads/products/
+
+# Uploads (archivos subidos por usuarios)
+public/uploads/avatars/*
+public/uploads/products/*
+!public/uploads/avatars/.gitkeep
+!public/uploads/products/.gitkeep
+
+# Logs
+*.log
+/tmp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
