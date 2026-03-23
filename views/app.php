@@ -4466,7 +4466,7 @@ const app = createApp({
       toast('Sesión cerrada.');
     }
 
-    // ─── Products ──────────────────────────────────────────
+    // ─── Products ─────_─────────────────────────────────────
     async function loadProducts(featured = false) {
       products.value.loading = true;
       try {
