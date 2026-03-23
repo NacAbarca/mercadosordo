@@ -339,6 +339,19 @@ class CartController
         $prod = $db->fetch("SELECT * FROM products WHERE id=? AND status='active'", [$data['product_id']]);
         if (!$prod) Response::json(['error' => 'Producto no disponible.'], 404);
         if ($prod['stock'] < $data['quantity']) Response::json(['error' => 'Stock insuficiente.'], 400);
+
+        // Bloquear vendedor comprando sus propios productos
+        $uid = Auth::id();
+        if ($uid && (int)$prod['seller_id'] === (int)$uid) {
+            Response::json(['error' => 'No puedes agregar tus propios productos al carrito.'], 422);
+        }
+        // Bloquear admin comprando
+        if ($uid) {
+            $buyer = $db->fetch("SELECT role FROM users WHERE id=?", [$uid]);
+            if ($buyer && $buyer['role'] === 'admin') {
+                Response::json(['error' => 'Los administradores no pueden realizar compras.'], 422);
+            }
+        }
         $cart = $this->getOrCreateCart($req, $db);
         $existing = $db->fetch("SELECT * FROM cart_items WHERE cart_id=? AND product_id=?", [$cart['id'], $data['product_id']]);
         if ($existing) {
@@ -423,6 +436,17 @@ class OrderController
 
         $items = $db->fetchAll("SELECT ci.*, p.price, p.title, p.sku, p.seller_id, p.stock FROM cart_items ci JOIN products p ON p.id=ci.product_id WHERE ci.cart_id=?", [$cart['id'] ?? 0]);
         if (empty($items)) Response::json(['error' => 'Carrito vacío. Agrega productos antes de continuar.'], 422);
+
+        // Validar que el comprador no sea el vendedor de ningún item
+        $buyerInfo = $db->fetch("SELECT role FROM users WHERE id=?", [Auth::id()]);
+        if ($buyerInfo && $buyerInfo['role'] === 'admin') {
+            Response::json(['error' => 'Los administradores no pueden realizar compras.'], 422);
+        }
+        foreach ($items as $item) {
+            if ((int)$item['seller_id'] === (int)Auth::id()) {
+                Response::json(['error' => 'Tu carrito contiene productos propios. Elimínalos antes de continuar.'], 422);
+            }
+        }
         $addr  = $db->fetch("SELECT * FROM user_addresses WHERE id=? AND user_id=?", [$data['address_id'], Auth::id()]);
         if (!$addr) Response::json(['error' => 'Dirección inválida.'], 422);
 

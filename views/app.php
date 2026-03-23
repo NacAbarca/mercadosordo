@@ -4505,6 +4505,14 @@ const app = createApp({
     }
 
     async function addToCart(product, qty = 1) {
+      // Bloquear admin
+      if (auth.value.user?.role === 'admin') {
+        toast('Los administradores no pueden realizar compras.', 'error'); return;
+      }
+      // Bloquear vendedor comprando sus propios productos
+      if (auth.value.user?.id && product.seller_id === auth.value.user.id) {
+        toast('No puedes comprar tus propios productos.', 'error'); return;
+      }
       if (!checkRut()) return;
       try {
         await api('POST', '/cart/items', { product_id: product.id, quantity: qty });
