@@ -2749,21 +2749,29 @@
           <p class="mt-3 text-muted">Sin notificaciones</p>
         </div>
         <div v-for="n in notifications" :key="n.id"
-             class="bg-white rounded shadow-sm p-3 mb-2 d-flex gap-3 align-items-start"
-             :class="!n.read_at?'border-start border-primary border-3':''"
-             style="cursor:pointer"
+             class="rounded p-3 mb-2 d-flex gap-3 align-items-start"
+             :style="!n.read_at
+               ? 'cursor:pointer;background:rgba(27,79,138,0.08);border-left:4px solid #1B4F8A;transition:background .2s'
+               : 'cursor:pointer;background:white;border-left:4px solid transparent;transition:background .2s;opacity:.75'"
+             @mouseenter="$event.currentTarget.style.background=!n.read_at?'rgba(27,79,138,0.14)':'rgba(0,0,0,0.03)'"
+             @mouseleave="$event.currentTarget.style.background=!n.read_at?'rgba(27,79,138,0.08)':'white'"
              @click="readNotif(n)">
           <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
-               style="width:40px;height:40px"
-               :class="'bg-'+n.color+' bg-opacity-10'">
-            <i :class="'bi '+n.icon+' text-'+n.color" style="font-size:1.1rem"></i>
+               style="width:42px;height:42px"
+               :style="'background:var(--ms-'+n.color+',#1B4F8A)20'">
+            <i :class="'bi '+n.icon" :style="'font-size:1.15rem;color:var(--ms-'+n.color+',#1B4F8A)'"></i>
           </div>
           <div class="flex-grow-1">
-            <div class="fw-bold small" :class="!n.read_at?'':'text-muted'">{{n.title}}</div>
-            <div class="text-muted small">{{n.body}}</div>
-            <div class="text-muted" style="font-size:.72rem">{{formatDate(n.created_at)}}</div>
+            <div class="small" :class="!n.read_at?'fw-bold':'text-muted'">{{n.title}}</div>
+            <div class="text-muted small mt-1">{{n.body}}</div>
+            <div class="text-muted mt-1 d-flex align-items-center gap-2" style="font-size:.72rem">
+              <i class="bi bi-clock"></i>{{formatDate(n.created_at)}}
+              <span v-if="n.entity_id" class="badge bg-primary bg-opacity-10 text-primary" style="font-size:.65rem">
+                Ver detalle →
+              </span>
+            </div>
           </div>
-          <span style="font-size:1.1rem;line-height:1" v-if="!n.read_at">👋🏻</span>
+          <span style="font-size:1.2rem;line-height:1;flex-shrink:0" v-if="!n.read_at">👋🏻</span>
         </div>
       </div>
     </template>
@@ -4286,7 +4294,26 @@ const app = createApp({
         notif.read_at = new Date().toISOString();
         unreadCount.value = Math.max(0, unreadCount.value - 1);
       }
-      if (notif.action_url) navigate('orders');
+      if (!notif.entity_id) return;
+
+      // Navegar según tipo de entidad
+      if (notif.entity_type === 'order') {
+        // Detectar si es notificación para vendedor o comprador
+        const vendorTypes = ['order_accepted','order_dispatched','order_completed','new_message','dispute_opened'];
+        const isVendorNotif = vendorTypes.includes(notif.type);
+
+        if (isVendorNotif) {
+          // Ir a Mis Pedidos y abrir el detalle
+          navigate('vendor-orders');
+          await new Promise(r => setTimeout(r, 300));
+          await loadVendorOrderDetail(notif.entity_id);
+        } else {
+          // Ir a Mis Compras y abrir el comprobante
+          navigate('orders');
+          await new Promise(r => setTimeout(r, 300));
+          await loadOrderDetail(notif.entity_id);
+        }
+      }
     }
 
     async function markAllNotifRead() {
