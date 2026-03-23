@@ -339,6 +339,19 @@ class CartController
         $prod = $db->fetch("SELECT * FROM products WHERE id=? AND status='active'", [$data['product_id']]);
         if (!$prod) Response::json(['error' => 'Producto no disponible.'], 404);
         if ($prod['stock'] < $data['quantity']) Response::json(['error' => 'Stock insuficiente.'], 400);
+
+        // Bloquear vendedor comprando sus propios productos
+        $uid = Auth::id();
+        if ($uid && (int)$prod['seller_id'] === (int)$uid) {
+            Response::json(['error' => 'No puedes agregar tus propios productos al carrito.'], 422);
+        }
+        // Bloquear admin comprando
+        if ($uid) {
+            $buyer = $db->fetch("SELECT role FROM users WHERE id=?", [$uid]);
+            if ($buyer && $buyer['role'] === 'admin') {
+                Response::json(['error' => 'Los administradores no pueden realizar compras.'], 422);
+            }
+        }
         $cart = $this->getOrCreateCart($req, $db);
         $existing = $db->fetch("SELECT * FROM cart_items WHERE cart_id=? AND product_id=?", [$cart['id'], $data['product_id']]);
         if ($existing) {
@@ -423,6 +436,17 @@ class OrderController
 
         $items = $db->fetchAll("SELECT ci.*, p.price, p.title, p.sku, p.seller_id, p.stock FROM cart_items ci JOIN products p ON p.id=ci.product_id WHERE ci.cart_id=?", [$cart['id'] ?? 0]);
         if (empty($items)) Response::json(['error' => 'Carrito vacío. Agrega productos antes de continuar.'], 422);
+
+        // Validar que el comprador no sea el vendedor de ningún item
+        $buyerInfo = $db->fetch("SELECT role FROM users WHERE id=?", [Auth::id()]);
+        if ($buyerInfo && $buyerInfo['role'] === 'admin') {
+            Response::json(['error' => 'Los administradores no pueden realizar compras.'], 422);
+        }
+        foreach ($items as $item) {
+            if ((int)$item['seller_id'] === (int)Auth::id()) {
+                Response::json(['error' => 'Tu carrito contiene productos propios. Elimínalos antes de continuar.'], 422);
+            }
+        }
         $addr  = $db->fetch("SELECT * FROM user_addresses WHERE id=? AND user_id=?", [$data['address_id'], Auth::id()]);
         if (!$addr) Response::json(['error' => 'Dirección inválida.'], 422);
 
@@ -430,15 +454,24 @@ class OrderController
         try {
             $subtotal    = array_sum(array_map(fn($i) => $i['price'] * $i['quantity'], $items));
             $orderNumber = 'MS-' . strtoupper(substr(uniqid(), -8));
+            $sellerId    = $items[0]['seller_id'] ?? null;
+            $ivaAmount   = round($subtotal - ($subtotal / 1.19), 2);
+            $commAmount  = round($subtotal * 0.05, 2);
+            $vendorNet   = round($subtotal - $commAmount, 2);
             $orderId     = $db->insert('orders', [
-                'order_number'    => $orderNumber,
-                'buyer_id'        => Auth::id(),
-                'status'          => 'pending',
-                'subtotal'        => $subtotal,
-                'shipping_cost'   => 0,
-                'total'           => $subtotal,
-                'payment_method'  => $data['payment_method'],
-                'address_snapshot'=> json_encode($addr),
+                'order_number'     => $orderNumber,
+                'buyer_id'         => Auth::id(),
+                'seller_id'        => $sellerId,
+                'status'           => 'pending',
+                'subtotal'         => $subtotal,
+                'shipping_cost'    => 0,
+                'total'            => $subtotal,
+                'subtotal_neto'    => round($subtotal / 1.19, 2),
+                'iva_amount'       => $ivaAmount,
+                'commission_amount'=> $commAmount,
+                'vendor_net'       => $vendorNet,
+                'payment_method'   => $data['payment_method'],
+                'address_snapshot' => json_encode($addr),
             ]);
             foreach ($items as $item) {
                 if ($item['stock'] < $item['quantity']) {
@@ -472,19 +505,153 @@ class AdminController
 {
     public function dashboard(Request $req): void
     {
-        $db   = DB::getInstance();
-        $data = [
-            'users_total'    => $db->fetch("SELECT COUNT(*) AS c FROM users")['c'],
-            'users_today'    => $db->fetch("SELECT COUNT(*) AS c FROM users WHERE DATE(created_at)=CURDATE()")['c'],
-            'products_total' => $db->fetch("SELECT COUNT(*) AS c FROM products WHERE status != 'deleted'")['c'],
-            'orders_today'   => $db->fetch("SELECT COUNT(*) AS c FROM orders WHERE DATE(created_at)=CURDATE()")['c'],
-            'revenue_today'  => $db->fetch("SELECT IFNULL(SUM(total),0) AS r FROM orders WHERE DATE(created_at)=CURDATE() AND status NOT IN ('cancelled','refunded')")['r'],
-            'revenue_month'  => $db->fetch("SELECT IFNULL(SUM(total),0) AS r FROM orders WHERE YEAR(created_at)=YEAR(NOW()) AND MONTH(created_at)=MONTH(NOW()) AND status NOT IN ('cancelled','refunded')")['r'],
-            'recent_orders'  => $db->fetchAll("SELECT o.*, u.name AS buyer FROM orders o JOIN users u ON u.id=o.buyer_id ORDER BY o.created_at DESC LIMIT 10"),
-            'top_products'   => $db->fetchAll("SELECT p.title, p.sales_count, p.price FROM products p ORDER BY p.sales_count DESC LIMIT 10"),
-            'revenue_chart'  => $db->fetchAll("SELECT DATE(created_at) AS date, SUM(total) AS total FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) GROUP BY DATE(created_at) ORDER BY date"),
-        ];
-        Response::json($data);
+        $db = DB::getInstance();
+
+        // ── KPIs principales ──────────────────────────────────────────────
+        $usersTotal    = (int)$db->fetch("SELECT COUNT(*) AS c FROM users WHERE status != 'suspended'")['c'];
+        $usersToday    = (int)$db->fetch("SELECT COUNT(*) AS c FROM users WHERE DATE(created_at)=CURDATE()")['c'];
+        $usersWeek     = (int)$db->fetch("SELECT COUNT(*) AS c FROM users WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")['c'];
+        $sellersTotal  = (int)$db->fetch("SELECT COUNT(*) AS c FROM users WHERE role IN ('seller','admin')")['c'];
+        $productsTotal = (int)$db->fetch("SELECT COUNT(*) AS c FROM products WHERE status='active'")['c'];
+        $ordersTotal   = (int)$db->fetch("SELECT COUNT(*) AS c FROM orders WHERE status NOT IN ('cancelled')")['c'];
+        $ordersToday   = (int)$db->fetch("SELECT COUNT(*) AS c FROM orders WHERE DATE(created_at)=CURDATE()")['c'];
+        $ordersWeek    = (int)$db->fetch("SELECT COUNT(*) AS c FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) AND status NOT IN ('cancelled')")['c'];
+        $ordersPending = (int)$db->fetch("SELECT COUNT(*) AS c FROM orders WHERE status='paid'")['c'];
+        $ordersDispute = (int)$db->fetch("SELECT COUNT(*) AS c FROM orders WHERE status='dispute'")['c'];
+
+        // ── Revenue ───────────────────────────────────────────────────────
+        $revenueToday  = (float)$db->fetch("SELECT IFNULL(SUM(total),0) AS r FROM orders WHERE DATE(created_at)=CURDATE() AND status NOT IN ('cancelled','refunded')")['r'];
+        $revenueWeek   = (float)$db->fetch("SELECT IFNULL(SUM(total),0) AS r FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) AND status NOT IN ('cancelled','refunded')")['r'];
+        $revenueMonth  = (float)$db->fetch("SELECT IFNULL(SUM(total),0) AS r FROM orders WHERE YEAR(created_at)=YEAR(NOW()) AND MONTH(created_at)=MONTH(NOW()) AND status NOT IN ('cancelled','refunded')")['r'];
+        $revenueTotal  = (float)$db->fetch("SELECT IFNULL(SUM(total),0) AS r FROM orders WHERE status IN ('paid','processing','dispatched','completed')")['r'];
+        $commTotal     = round($revenueTotal * 0.05, 2);
+
+        // ── Órdenes por estado ────────────────────────────────────────────
+        $ordersByStatus = $db->fetchAll(
+            "SELECT status, COUNT(*) AS count FROM orders GROUP BY status ORDER BY count DESC"
+        );
+
+        // ── Gráfico ingresos 30 días ──────────────────────────────────────
+        $revenueChart = $db->fetchAll(
+            "SELECT DATE(created_at) AS date, SUM(total) AS total, COUNT(*) AS orders
+             FROM orders
+             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+               AND status NOT IN ('cancelled','refunded')
+             GROUP BY DATE(created_at) ORDER BY date"
+        );
+
+        // ── Top productos más vendidos ────────────────────────────────────
+        $topSelling = $db->fetchAll(
+            "SELECT p.id, p.title, p.price, p.sales_count, p.views, p.rating_avg, p.rating_count,
+                    (SELECT url FROM product_images WHERE product_id=p.id AND is_primary=1 LIMIT 1) AS image,
+                    u.name AS seller_name,
+                    IFNULL(p.sales_count * p.price, 0) AS revenue
+             FROM products p
+             LEFT JOIN users u ON u.id=p.seller_id
+             WHERE p.status='active'
+             ORDER BY p.sales_count DESC LIMIT 8"
+        );
+
+        // ── Top productos más vistos ──────────────────────────────────────
+        $topViewed = $db->fetchAll(
+            "SELECT p.id, p.title, p.price, p.views, p.sales_count, p.rating_avg,
+                    (SELECT url FROM product_images WHERE product_id=p.id AND is_primary=1 LIMIT 1) AS image,
+                    u.name AS seller_name
+             FROM products p
+             LEFT JOIN users u ON u.id=p.seller_id
+             WHERE p.status='active'
+             ORDER BY p.views DESC LIMIT 8"
+        );
+
+        // ── Top favoritos (wishlists) ─────────────────────────────────────
+        $topFavorites = $db->fetchAll(
+            "SELECT p.id, p.title, p.price, COUNT(w.id) AS wishlist_count,
+                    (SELECT url FROM product_images WHERE product_id=p.id AND is_primary=1 LIMIT 1) AS image
+             FROM products p
+             LEFT JOIN wishlists w ON w.product_id=p.id
+             WHERE p.status='active'
+             GROUP BY p.id, p.title, p.price ORDER BY wishlist_count DESC LIMIT 6"
+        );
+
+        // ── Mejores vendedores ────────────────────────────────────────────
+        $topSellers = $db->fetchAll(
+            "SELECT u.id, u.name, u.avatar,
+                    COUNT(DISTINCT p.id) AS products_count,
+                    IFNULL(SUM(oi.quantity),0) AS total_sales,
+                    IFNULL(SUM(oi.subtotal),0) AS total_revenue,
+                    ROUND(AVG(p.rating_avg),2) AS avg_rating
+             FROM users u
+             LEFT JOIN products p ON p.seller_id=u.id AND p.status='active'
+             LEFT JOIN order_items oi ON oi.seller_id=u.id
+             WHERE u.role IN ('seller','admin')
+             GROUP BY u.id, u.name, u.avatar ORDER BY total_sales DESC LIMIT 6"
+        );
+
+        // ── Mejores compradores ───────────────────────────────────────────
+        $topBuyers = $db->fetchAll(
+            "SELECT u.id, u.name, u.avatar,
+                    COUNT(DISTINCT o.id) AS orders_count,
+                    IFNULL(SUM(o.total),0) AS total_spent
+             FROM users u
+             LEFT JOIN orders o ON o.buyer_id=u.id AND o.status NOT IN ('cancelled','refunded')
+             WHERE u.role='buyer'
+             GROUP BY u.id, u.name, u.avatar ORDER BY total_spent DESC LIMIT 6"
+        );
+
+        // ── Reputación global ─────────────────────────────────────────────
+        $avgRating    = (float)($db->fetch("SELECT ROUND(AVG(rating),2) AS r FROM reviews WHERE status='approved'")['r'] ?? 0);
+        $totalReviews = (int)$db->fetch("SELECT COUNT(*) AS c FROM reviews WHERE status='approved'")['c'];
+        $ratingDist   = $db->fetchAll(
+            "SELECT rating, COUNT(*) AS count FROM reviews WHERE status='approved' GROUP BY rating ORDER BY rating DESC"
+        );
+
+        // ── Actividad reciente ────────────────────────────────────────────
+        $recentOrders = $db->fetchAll(
+            "SELECT o.order_number, o.total, o.status, o.created_at,
+                    u.name AS buyer_name
+             FROM orders o JOIN users u ON u.id=o.buyer_id
+             ORDER BY o.created_at DESC LIMIT 10"
+        );
+
+        // ── Categorías más activas ────────────────────────────────────────
+        $topCategories = $db->fetchAll(
+            "SELECT c.name, COUNT(p.id) AS products, IFNULL(SUM(p.sales_count),0) AS sales
+             FROM categories c
+             LEFT JOIN products p ON p.category_id=c.id AND p.status='active'
+             GROUP BY c.id, c.name ORDER BY sales DESC LIMIT 8"
+        );
+
+        Response::json([
+            'kpis' => [
+                'users_total'    => $usersTotal,
+                'users_today'    => $usersToday,
+                'users_week'     => $usersWeek,
+                'sellers_total'  => $sellersTotal,
+                'products_total' => $productsTotal,
+                'orders_total'   => $ordersTotal,
+                'orders_today'   => $ordersToday,
+                'orders_week'    => $ordersWeek,
+                'orders_pending' => $ordersPending,
+                'orders_dispute' => $ordersDispute,
+                'revenue_today'  => $revenueToday,
+                'revenue_week'   => $revenueWeek,
+                'revenue_month'  => $revenueMonth,
+                'revenue_total'  => $revenueTotal,
+                'commission_total' => $commTotal,
+                'avg_rating'     => $avgRating,
+                'total_reviews'  => $totalReviews,
+            ],
+            'orders_by_status' => $ordersByStatus,
+            'revenue_chart'    => $revenueChart,
+            'top_selling'      => $topSelling,
+            'top_viewed'       => $topViewed,
+            'top_favorites'    => $topFavorites,
+            'top_sellers'      => $topSellers,
+            'top_buyers'       => $topBuyers,
+            'rating_dist'      => $ratingDist,
+            'recent_orders'    => $recentOrders,
+            'top_categories'   => $topCategories,
+        ]);
     }
 
     public function users(Request $req): void
@@ -1280,6 +1447,316 @@ class BankTransferController
         $db->update('orders',['status'=>'paid','payment_id'=>$khipuId],'id=?',[$pay['order_id']]);
         $db->insert('order_tracking',['order_id'=>$pay['order_id'],'status'=>'paid','description'=>'Transferencia bancaria confirmada via Khipu. ID:'.$khipuId]);
         http_response_code(200);echo json_encode(['status'=>'ok']);exit;
+    }
+}
+
+// ============================================================
+// OrderManagementController — Panel vendedor + protocolo
+// ============================================================
+class OrderManagementController
+{
+    private const IVA_RATE        = 0.19;
+    private const COMMISSION_RATE = 0.05;
+    private const AUTO_COMPLETE_DAYS = 7;
+
+    // ── Calcular desglose financiero ───────────────────────
+    private function calcFinancials(float $total): array
+    {
+        $ivaAmount    = round($total - ($total / (1 + self::IVA_RATE)), 2);
+        $subtotalNeto = round($total - $ivaAmount, 2);
+        $commission   = round($total * self::COMMISSION_RATE, 2);
+        $vendorNet    = round($total - $commission, 2);
+        return [
+            'total'            => $total,
+            'iva_amount'       => $ivaAmount,
+            'subtotal_neto'    => $subtotalNeto,
+            'commission_amount'=> $commission,
+            'vendor_net'       => $vendorNet,
+            'iva_pct'          => self::IVA_RATE * 100,
+            'commission_pct'   => self::COMMISSION_RATE * 100,
+        ];
+    }
+
+    // ── Crear notificación ─────────────────────────────────
+    private function notify(DB $db, int $userId, string $type, string $title, string $body, string $icon = 'bi-bell', string $color = 'primary', ?string $entityType = null, ?int $entityId = null): void
+    {
+        $db->insert('notifications', [
+            'user_id'     => $userId,
+            'type'        => $type,
+            'title'       => $title,
+            'body'        => $body,
+            'icon'        => $icon,
+            'color'       => $color,
+            'entity_type' => $entityType,
+            'entity_id'   => $entityId,
+            'action_url'  => $entityType === 'order' ? '/orders/' . $entityId : null,
+        ]);
+    }
+
+    // ── VENDEDOR: mis pedidos recibidos ────────────────────
+    public function vendorOrders(Request $req): void
+    {
+        $db     = DB::getInstance();
+        $page   = (int)$req->input('page', 1);
+        $status = $req->input('status', '');
+        // Buscar órdenes donde el usuario es vendedor
+        $uid      = Auth::id();
+        $bindings = [$uid, $uid];
+        $where    = "(o.seller_id = ? OR EXISTS (SELECT 1 FROM order_items oi2 WHERE oi2.order_id = o.id AND oi2.seller_id = ?))";
+        if ($status) { $where .= " AND o.status = ?"; $bindings[] = $status; }
+
+        $totalRow = $db->fetch(
+            "SELECT COUNT(DISTINCT o.id) AS c FROM orders o WHERE {$where}",
+            $bindings
+        );
+        $total = (int)($totalRow['c'] ?? 0);
+        $offset = ($page - 1) * 20;
+
+        $rows = $db->fetchAll(
+            "SELECT DISTINCT o.*,
+                u.name AS buyer_name, u.email AS buyer_email, u.rut AS buyer_rut,
+                (SELECT COUNT(*) FROM order_items WHERE order_id=o.id) AS items_count
+             FROM orders o
+             JOIN users u ON u.id = o.buyer_id
+             WHERE {$where}
+             ORDER BY o.created_at DESC
+             LIMIT 20 OFFSET {$offset}",
+            $bindings
+        );
+
+        $result = [
+            'data'         => $rows,
+            'total'        => $total,
+            'per_page'     => 20,
+            'current_page' => $page,
+            'last_page'    => (int)ceil($total / 20),
+        ];
+        foreach ($result['data'] as &$order) {
+            $fin = $this->calcFinancials((float)$order['total']);
+            $order['financials'] = $fin;
+            $order['items'] = $db->fetchAll(
+                "SELECT oi.*,
+                  (SELECT url FROM product_images WHERE product_id=oi.product_id AND is_primary=1 LIMIT 1) AS image
+                 FROM order_items oi
+                 WHERE oi.order_id=? AND oi.seller_id=?",
+                [$order['id'], Auth::id()]
+            );
+        }
+        Response::json($result);
+    }
+
+    // ── VENDEDOR: detalle de una orden ────────────────────
+    public function vendorOrderDetail(Request $req): void
+    {
+        $id = (int)$req->param('id');
+        $db = DB::getInstance();
+        $order = $db->fetch(
+            "SELECT o.*, u.name AS buyer_name, u.email AS buyer_email,
+                    u.rut AS buyer_rut, u.phone AS buyer_phone
+             FROM orders o JOIN users u ON u.id=o.buyer_id
+             WHERE o.id=? AND (o.seller_id=? OR EXISTS(
+                 SELECT 1 FROM order_items oi WHERE oi.order_id=o.id AND oi.seller_id=?
+             ))",
+            [$id, Auth::id(), Auth::id()]
+        );
+        if (!$order) Response::json(['error' => 'Orden no encontrada.'], 404);
+        $order['items']         = $db->fetchAll("SELECT oi.*, (SELECT url FROM product_images WHERE product_id=oi.product_id AND is_primary=1 LIMIT 1) AS image FROM order_items oi WHERE oi.order_id=? AND oi.seller_id=?", [$id, Auth::id()]);
+        $order['tracking']      = $db->fetchAll("SELECT * FROM order_tracking WHERE order_id=? ORDER BY created_at ASC", [$id]);
+        $order['confirmations'] = $db->fetchAll("SELECT oc.*, u.name AS confirmed_by_name FROM order_confirmations oc LEFT JOIN users u ON u.id=oc.confirmed_by WHERE oc.order_id=? ORDER BY oc.confirmed_at ASC", [$id]);
+        $order['messages']      = $db->fetchAll("SELECT om.*, u.name AS sender_name, u.avatar AS sender_avatar FROM order_messages om JOIN users u ON u.id=om.sender_id WHERE om.order_id=? ORDER BY om.created_at ASC", [$id]);
+        $order['financials']    = $this->calcFinancials((float)$order['total']);
+        $order['dispute']       = $db->fetch("SELECT * FROM order_disputes WHERE order_id=?", [$id]);
+        Response::json($order);
+    }
+
+    // ── PROTOCOLO PASO 1: Vendedor acepta orden ────────────
+    public function vendorAccept(Request $req): void
+    {
+        $id = (int)$req->param('id');
+        $db = DB::getInstance();
+        $order = $db->fetch("SELECT * FROM orders WHERE id=? AND (seller_id=? OR EXISTS(SELECT 1 FROM order_items oi WHERE oi.order_id=orders.id AND oi.seller_id=?))", [$id, Auth::id(), Auth::id()]);
+        if (!$order) Response::json(['error' => 'Orden no encontrada.'], 404);
+        if (!in_array($order['status'], ['paid','pending'])) Response::json(['error' => 'Solo puedes aceptar órdenes en estado pagado o pendiente.'], 400);
+        $db->beginTransaction();
+        try {
+            $db->update('orders', ['status' => 'processing', 'vendor_accepted_at' => date('Y-m-d H:i:s')], 'id=?', [$id]);
+            $db->insert('order_tracking', ['order_id' => $id, 'status' => 'processing', 'description' => 'Vendedor aceptó la orden. Preparando envío.']);
+            $db->insert('order_confirmations', ['order_id' => $id, 'step' => 'vendor_accept', 'confirmed_by' => Auth::id(), 'notes' => $req->input('notes')]);
+            $this->notify($db, (int)$order['buyer_id'], 'order_accepted', '✅ Vendedor aceptó tu orden', 'Tu orden ' . $order['order_number'] . ' está siendo preparada.', 'bi-bag-check', 'success', 'order', $id);
+            $db->commit();
+            Response::json(['message' => 'Orden aceptada. El comprador fue notificado.']);
+        } catch (\Throwable $e) { $db->rollback(); Response::json(['error' => 'Error al aceptar orden.'], 500); }
+    }
+
+    // ── PROTOCOLO PASO 2: Vendedor despacha ───────────────
+    public function vendorDispatch(Request $req): void
+    {
+        $id = (int)$req->param('id');
+        $db = DB::getInstance();
+        $order = $db->fetch("SELECT * FROM orders WHERE id=? AND (seller_id=? OR EXISTS(SELECT 1 FROM order_items oi WHERE oi.order_id=orders.id AND oi.seller_id=?))", [$id, Auth::id(), Auth::id()]);
+        if (!$order) Response::json(['error' => 'Orden no encontrada.'], 404);
+        if ($order['status'] !== 'processing') Response::json(['error' => 'Debes aceptar la orden primero.'], 400);
+        $tracking   = $req->input('tracking_number');
+        $carrier    = $req->input('carrier', 'Correos de Chile');
+        $autoComplete = date('Y-m-d H:i:s', time() + self::AUTO_COMPLETE_DAYS * 86400);
+        $db->beginTransaction();
+        try {
+            $db->update('orders', [
+                'status'          => 'dispatched',
+                'tracking_number' => $tracking,
+                'tracking_carrier'=> $carrier,
+                'dispatched_at'   => date('Y-m-d H:i:s'),
+                'auto_complete_at'=> $autoComplete,
+            ], 'id=?', [$id]);
+            $db->insert('order_tracking', ['order_id' => $id, 'status' => 'dispatched', 'description' => "Despachado por {$carrier}" . ($tracking ? " · Nº seguimiento: {$tracking}" : '')]);
+            $db->insert('order_confirmations', ['order_id' => $id, 'step' => 'vendor_dispatch', 'confirmed_by' => Auth::id(), 'metadata' => json_encode(['tracking_number' => $tracking, 'carrier' => $carrier])]);
+            $this->notify($db, (int)$order['buyer_id'], 'order_dispatched', '🚚 Tu pedido fue despachado', "Orden {$order['order_number']} en camino. Carrier: {$carrier}" . ($tracking ? " · Tracking: {$tracking}" : ''), 'bi-truck', 'info', 'order', $id);
+            $db->commit();
+            Response::json(['message' => 'Despacho confirmado. Comprador notificado.', 'auto_complete_at' => $autoComplete]);
+        } catch (\Throwable $e) { $db->rollback(); Response::json(['error' => 'Error al confirmar despacho.'], 500); }
+    }
+
+    // ── PROTOCOLO PASO 3: Comprador confirma recepción ────
+    public function buyerConfirm(Request $req): void
+    {
+        $id = (int)$req->param('id');
+        $db = DB::getInstance();
+        $order = $db->fetch("SELECT * FROM orders WHERE id=? AND buyer_id=?", [$id, Auth::id()]);
+        if (!$order) Response::json(['error' => 'Orden no encontrada.'], 404);
+        if (!in_array($order['status'], ['dispatched', 'in_transit'])) Response::json(['error' => 'La orden aún no fue despachada.'], 400);
+        $db->beginTransaction();
+        try {
+            $db->update('orders', ['status' => 'completed', 'delivered_at' => date('Y-m-d H:i:s'), 'completed_at' => date('Y-m-d H:i:s')], 'id=?', [$id]);
+            $db->insert('order_tracking', ['order_id' => $id, 'status' => 'completed', 'description' => 'Comprador confirmó recepción. Fondos liberados al vendedor.']);
+            $db->insert('order_confirmations', ['order_id' => $id, 'step' => 'buyer_confirm', 'confirmed_by' => Auth::id(), 'notes' => $req->input('notes')]);
+            $fin = $this->calcFinancials((float)$order['total']);
+            $this->notify($db, (int)$order['seller_id'], 'order_completed', '💰 Fondos liberados', "Orden {$order['order_number']} completada. Recibirás \$" . number_format($fin['vendor_net'], 0, ',', '.') . " CLP.", 'bi-cash-coin', 'success', 'order', $id);
+            $db->commit();
+            Response::json(['message' => 'Recepción confirmada. Fondos liberados al vendedor.']);
+        } catch (\Throwable $e) { $db->rollback(); Response::json(['error' => 'Error al confirmar.'], 500); }
+    }
+
+    // ── PROTOCOLO: Cancelar orden ─────────────────────────
+    public function cancelOrder(Request $req): void
+    {
+        $id     = (int)$req->param('id');
+        $db     = DB::getInstance();
+        $userId = Auth::id();
+        $order  = $db->fetch(
+            "SELECT * FROM orders WHERE id=? AND (
+                buyer_id=? OR seller_id=? OR
+                EXISTS(SELECT 1 FROM order_items oi WHERE oi.order_id=orders.id AND oi.seller_id=?)
+            )", [$id, $userId, $userId, $userId]
+        );
+        if (!$order) Response::json(['error' => 'Orden no encontrada.'], 404);
+        if (in_array($order['status'], ['completed','refunded','cancelled'])) Response::json(['error' => 'No se puede cancelar esta orden.'], 400);
+        $db->beginTransaction();
+        try {
+            // Restaurar stock
+            $items = $db->fetchAll("SELECT * FROM order_items WHERE order_id=?", [$id]);
+            foreach ($items as $item) {
+                $db->query("UPDATE products SET stock=stock+?, sales_count=GREATEST(0,sales_count-?) WHERE id=?", [$item['quantity'], $item['quantity'], $item['product_id']]);
+            }
+            $db->update('orders', ['status' => 'cancelled'], 'id=?', [$id]);
+            $db->insert('order_tracking', ['order_id' => $id, 'status' => 'cancelled', 'description' => 'Orden cancelada. ' . ($req->input('reason') ?? '')]);
+            // Notificar al otro participante
+            $notifyUserId = ($userId == $order['buyer_id']) ? $order['seller_id'] : $order['buyer_id'];
+            $this->notify($db, (int)$notifyUserId, 'order_cancelled', '❌ Orden cancelada', "La orden {$order['order_number']} fue cancelada.", 'bi-x-circle', 'danger', 'order', $id);
+            $db->commit();
+            Response::json(['message' => 'Orden cancelada.']);
+        } catch (\Throwable $e) { $db->rollback(); Response::json(['error' => 'Error al cancelar.'], 500); }
+    }
+
+    // ── Abrir disputa ─────────────────────────────────────
+    public function openDispute(Request $req): void
+    {
+        $id   = (int)$req->param('id');
+        $db   = DB::getInstance();
+        $order = $db->fetch("SELECT * FROM orders WHERE id=? AND buyer_id=?", [$id, Auth::id()]);
+        if (!$order) Response::json(['error' => 'Orden no encontrada.'], 404);
+        if (!in_array($order['status'], ['dispatched','in_transit','delivered'])) Response::json(['error' => 'No puedes abrir disputa en esta etapa.'], 400);
+        $existing = $db->fetch("SELECT id FROM order_disputes WHERE order_id=?", [$id]);
+        if ($existing) Response::json(['error' => 'Ya existe una disputa para esta orden.'], 409);
+        $data = $req->validate(['reason' => 'required', 'description' => 'required|min:20']);
+        $db->beginTransaction();
+        try {
+            $db->insert('order_disputes', ['order_id' => $id, 'opened_by' => Auth::id(), 'reason' => $data['reason'], 'description' => $data['description']]);
+            $db->update('orders', ['status' => 'dispute'], 'id=?', [$id]);
+            $db->insert('order_tracking', ['order_id' => $id, 'status' => 'dispute', 'description' => 'Disputa abierta: ' . $data['reason']]);
+            $this->notify($db, (int)$order['seller_id'], 'dispute_opened', '⚠️ Disputa abierta', "El comprador abrió una disputa en la orden {$order['order_number']}.", 'bi-shield-exclamation', 'warning', 'order', $id);
+            $db->commit();
+            Response::json(['message' => 'Disputa abierta. El equipo revisará el caso.'], 201);
+        } catch (\Throwable $e) { $db->rollback(); Response::json(['error' => 'Error al abrir disputa.'], 500); }
+    }
+
+    // ── Notificaciones ────────────────────────────────────
+    public function getNotifications(Request $req): void
+    {
+        $db    = DB::getInstance();
+        $page  = (int)$req->input('page', 1);
+        $unread = $req->input('unread');
+        $sql   = "SELECT * FROM notifications WHERE user_id=?";
+        $b     = [Auth::id()];
+        if ($unread) { $sql .= " AND read_at IS NULL"; }
+        $sql .= " ORDER BY created_at DESC";
+        $result = $db->paginate($sql, $b, $page, 20);
+        $result['unread_count'] = (int)$db->fetch("SELECT COUNT(*) AS c FROM notifications WHERE user_id=? AND read_at IS NULL", [Auth::id()])['c'];
+        Response::json($result);
+    }
+
+    public function markNotificationRead(Request $req): void
+    {
+        $id = (int)$req->param('id');
+        DB::getInstance()->update('notifications', ['read_at' => date('Y-m-d H:i:s')], 'id=? AND user_id=?', [$id, Auth::id()]);
+        Response::json(['message' => 'Marcada como leída.']);
+    }
+
+    public function markAllRead(Request $req): void
+    {
+        DB::getInstance()->query("UPDATE notifications SET read_at=NOW() WHERE user_id=? AND read_at IS NULL", [Auth::id()]);
+        Response::json(['message' => 'Todas marcadas como leídas.']);
+    }
+
+    // ── Chat por orden ────────────────────────────────────
+    public function getMessages(Request $req): void
+    {
+        $id    = (int)$req->param('id');
+        $db    = DB::getInstance();
+        $order = $db->fetch(
+            "SELECT * FROM orders WHERE id=? AND (
+                buyer_id=? OR seller_id=? OR
+                EXISTS(SELECT 1 FROM order_items oi WHERE oi.order_id=orders.id AND oi.seller_id=?)
+            )", [$id, Auth::id(), Auth::id(), Auth::id()]
+        );
+        if (!$order) Response::json(['error' => 'No autorizado.'], 403);
+        $msgs = $db->fetchAll(
+            "SELECT om.*, u.name AS sender_name, u.avatar AS sender_avatar
+             FROM order_messages om JOIN users u ON u.id=om.sender_id
+             WHERE om.order_id=? ORDER BY om.created_at ASC", [$id]
+        );
+        $db->query("UPDATE order_messages SET read_at=NOW() WHERE order_id=? AND sender_id != ? AND read_at IS NULL", [$id, Auth::id()]);
+        Response::json(['messages' => $msgs, 'order_number' => $order['order_number']]);
+    }
+
+    public function sendMessage(Request $req): void
+    {
+        $id   = (int)$req->param('id');
+        $db   = DB::getInstance();
+        $data = $req->validate(['message' => 'required|min:1']);
+        $order = $db->fetch(
+            "SELECT * FROM orders WHERE id=? AND (
+                buyer_id=? OR seller_id=? OR
+                EXISTS(SELECT 1 FROM order_items oi WHERE oi.order_id=orders.id AND oi.seller_id=?)
+            )", [$id, Auth::id(), Auth::id(), Auth::id()]
+        );
+        if (!$order) Response::json(['error' => 'No autorizado.'], 403);
+        $msgId = $db->insert('order_messages', ['order_id' => $id, 'sender_id' => Auth::id(), 'message' => trim($data['message']), 'type' => 'text']);
+        // Notificar al otro
+        $receiver = (Auth::id() == $order['buyer_id']) ? $order['seller_id'] : $order['buyer_id'];
+        $sender   = $db->fetch("SELECT name FROM users WHERE id=?", [Auth::id()]);
+        $this->notify($db, (int)$receiver, 'new_message', '💬 Nuevo mensaje', $sender['name'] . ': ' . substr(trim($data['message']), 0, 80), 'bi-chat-dots', 'info', 'order', $id);
+        $msg = $db->fetch("SELECT om.*, u.name AS sender_name, u.avatar AS sender_avatar FROM order_messages om JOIN users u ON u.id=om.sender_id WHERE om.id=?", [$msgId]);
+        Response::json(['message' => $msg], 201);
     }
 }
 

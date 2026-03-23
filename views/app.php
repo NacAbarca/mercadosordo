@@ -11,29 +11,29 @@
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
 
   <style>
     :root {
-      --ms-yellow: #FFE600;
-      --ms-yellow-dark: #F0D800;
-      --ms-blue: #3483FA;
-      --ms-blue-dark: #2968C8;
+      --ms-yellow: #F4C430;
+      --ms-yellow-dark: #C9991A;
+      --ms-blue: #1B4F8A;
+      --ms-blue-dark: #0E3060;
       --ms-green: #00A650;
-      --ms-text: #1A1A2E;
-      --ms-muted: #666;
-      --ms-border: #e8e8e8;
-      --ms-bg: #EDEDED;
+      --ms-text: #0A1628;
+      --ms-muted: #5A7099;
+      --ms-border: #D6E4F0;
+      --ms-bg: #EBF2FB;
       --ms-card: #ffffff;
       --ms-radius: 8px;
-      --ms-shadow: 0 1px 4px rgba(0,0,0,.12);
-      --ms-shadow-hover: 0 4px 16px rgba(0,0,0,.16);
+      --ms-shadow: 0 1px 4px rgba(11,30,60,.10);
+      --ms-shadow-hover: 0 4px 16px rgba(11,30,60,.16);
     }
 
     * { box-sizing: border-box; }
 
     body {
-      font-family: 'Nunito', sans-serif;
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
       background: var(--ms-bg);
       color: var(--ms-text);
       min-height: 100vh;
@@ -41,7 +41,7 @@
 
     /* ─── NAVBAR ─── */
     .navbar-ms {
-      background: var(--ms-yellow);
+      background: var(--ms-blue);
       padding: 10px 0;
       position: sticky; top: 0; z-index: 1040;
       box-shadow: 0 2px 8px rgba(0,0,0,.1);
@@ -50,10 +50,10 @@
       font-family: 'Sora', sans-serif;
       font-weight: 800;
       font-size: 1.5rem;
-      color: var(--ms-text);
+      color: #ffffff;
       text-decoration: none;
     }
-    .navbar-ms .brand span { color: var(--ms-blue); }
+    .navbar-ms .brand span { color: var(--ms-yellow); }
 
     .search-bar { flex: 1; max-width: 600px; position: relative; }
     .search-bar input {
@@ -67,17 +67,18 @@
     }
     .search-bar button {
       border-radius: 0 4px 4px 0;
-      background: var(--ms-blue);
-      color: white;
+      background: var(--ms-yellow);
+      color: var(--ms-blue-dark);
       border: none;
       padding: 10px 18px;
       cursor: pointer;
       transition: background .2s;
+      font-weight: 700;
     }
-    .search-bar button:hover { background: var(--ms-blue-dark); }
+    .search-bar button:hover { background: var(--ms-yellow-dark); }
 
     .navbar-actions a, .navbar-actions button {
-      color: var(--ms-text);
+      color: rgba(255,255,255,.85);
       text-decoration: none;
       font-size: .85rem;
       font-weight: 600;
@@ -88,7 +89,48 @@
       border-radius: 4px;
       transition: background .15s;
     }
-    .navbar-actions a:hover, .navbar-actions button:hover { background: rgba(0,0,0,.07); }
+    .navbar-actions a:hover, .navbar-actions button:hover { background: rgba(255,255,255,.12); }
+
+    /* ─── DROPDOWN MENÚ ─── */
+    .navbar-ms .dropdown-menu {
+      background: var(--ms-blue-dark);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.25);
+      min-width: 220px;
+      padding: 8px;
+      margin-top: 8px !important;
+    }
+    .navbar-ms .dropdown-menu .dropdown-item {
+      color: rgba(255,255,255,.85);
+      border-radius: 6px;
+      padding: 9px 14px;
+      font-size: .88rem;
+      font-weight: 600;
+      transition: background .15s;
+    }
+    .navbar-ms .dropdown-menu .dropdown-item:hover {
+      background: rgba(255,255,255,.12);
+      color: var(--ms-yellow);
+    }
+    .navbar-ms .dropdown-menu .dropdown-item.text-danger {
+      color: #ff6b6b !important;
+    }
+    .navbar-ms .dropdown-menu .dropdown-item.text-danger:hover {
+      background: rgba(255,107,107,.15);
+      color: #ff6b6b !important;
+    }
+    .navbar-ms .dropdown-menu .dropdown-divider {
+      border-color: rgba(255,255,255,.15);
+      margin: 6px 0;
+    }
+    /* Header del dropdown con nombre de usuario */
+    .navbar-ms .dropdown-menu .dropdown-header {
+      color: var(--ms-yellow);
+      font-weight: 800;
+      font-size: .85rem;
+      padding: 6px 14px;
+    }
     .navbar-actions i { font-size: 1.3rem; }
     .cart-badge {
       background: var(--ms-blue); color: white;
@@ -100,8 +142,8 @@
 
     /* ─── CATEGORIES NAV ─── */
     .cat-nav {
-      background: white;
-      border-bottom: 1px solid var(--ms-border);
+      background: var(--ms-blue-dark);
+      border-bottom: 2px solid var(--ms-yellow);
       overflow-x: auto;
     }
     .cat-nav::-webkit-scrollbar { height: 0; }
@@ -112,13 +154,13 @@
     .cat-nav a {
       display: flex; align-items: center; gap: 6px;
       padding: 10px 16px;
-      font-size: .85rem; font-weight: 600; color: var(--ms-text);
-      text-decoration: none; border-bottom: 2px solid transparent;
+      font-size: .85rem; font-weight: 600; color: rgba(255,255,255,.7);
+      text-decoration: none; border-bottom: 3px solid transparent;
       transition: all .15s;
     }
     .cat-nav a:hover, .cat-nav a.active {
-      color: var(--ms-blue);
-      border-bottom-color: var(--ms-blue);
+      color: var(--ms-yellow);
+      border-bottom-color: var(--ms-yellow);
     }
 
     /* ─── HERO BANNER ─── */
@@ -315,6 +357,30 @@
     }
     [v-cloak] { display: none; }
 
+  /* ─── FOOTER ─── */
+  .ms-footer {
+    background: var(--ms-text);
+    color: rgba(255,255,255,.5);
+    text-align: center;
+    padding: 14px 16px;
+    font-size: .78rem;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    letter-spacing: .3px;
+    margin-top: auto;
+  }
+  .ms-footer a {
+    color: var(--ms-yellow);
+    text-decoration: none;
+    font-weight: 700;
+  }
+  .ms-footer a:hover { text-decoration: underline; }
+  body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  #app { flex: 1; display: flex; flex-direction: column; }
+
     @media (max-width: 768px) {
       .admin-sidebar { display: none; }
       .search-bar input { font-size: .85rem; }
@@ -363,15 +429,24 @@
               <span>{{ auth.user.name.split(' ')[0] }}</span>
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
+              <li><h6 class="dropdown-header"><i class="bi bi-person-circle me-2"></i>{{ auth.user?.name }}</h6></li>
+              <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('profile')"><i class="bi bi-person me-2"></i>Mi perfil</a></li>
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('orders')"><i class="bi bi-box me-2"></i>Mis compras</a></li>
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('my-products')"><i class="bi bi-grid me-2"></i>Mis ventas</a></li>
+              <li><a class="dropdown-item" href="#" @click.prevent="navigate('vendor-orders')"><i class="bi bi-bag-check me-2"></i>Mis pedidos <span class="badge bg-danger ms-1" v-if="vendorOrdersBadge>0">{{vendorOrdersBadge}}</span></a></li>
               <li v-if="auth.user.role === 'admin'"><a class="dropdown-item" href="#" @click.prevent="navigate('admin')"><i class="bi bi-shield me-2"></i>Admin Panel</a></li>
               <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item text-danger" href="#" @click.prevent="logout"><i class="bi bi-box-arrow-right me-2"></i>Salir</a></li>
             </ul>
           </div>
         </template>
+        <!-- Notificaciones -->
+        <a href="#" @click.prevent="navigate('notifications')" style="position:relative" v-if="auth.user">
+          <i class="bi bi-bell"></i>
+          <span>Avisos</span>
+          <span class="cart-badge" v-if="unreadCount>0" style="background:#e53935">{{unreadCount>9?'9+':unreadCount}}</span>
+        </a>
         <a href="#" @click.prevent="navigate('cart')" style="position:relative">
           <i class="bi bi-cart3"></i>
           <span>Carrito</span>
@@ -662,11 +737,21 @@
               </div>
             </div>
 
+            <!-- Botones acción comprador -->
+            <div class="mt-3 d-flex gap-2" v-if="['dispatched','in_transit'].includes(selectedOrder.status)">
+              <button class="btn btn-success fw-bold" @click="confirmOrderReceived(selectedOrder.id)">
+                <i class="bi bi-check-circle me-1"></i>Confirmar recepción
+              </button>
+              <button class="btn btn-outline-warning btn-sm" @click="openDisputeModal(selectedOrder.id)">
+                <i class="bi bi-shield-exclamation me-1"></i>Abrir disputa
+              </button>
+            </div>
+
             <!-- Tracking -->
             <div class="mt-4" v-if="selectedOrder.tracking?.length">
               <h6 class="fw-bold mb-3"><i class="bi bi-truck me-2 text-primary"></i>Seguimiento</h6>
               <div class="d-flex flex-column gap-2">
-                <div v-for="t in selectedOrder.tracking" :key="t.id"
+                <div v-for="t in [...(selectedOrder.tracking||[])].reverse()" :key="t.id"
                      class="d-flex gap-3 align-items-start">
                   <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center flex-shrink-0"
                        style="width:28px;height:28px;font-size:.7rem;color:white">
@@ -2343,6 +2428,354 @@
       </div>
     </template>
 
+
+    <!-- ─── MIS PEDIDOS (VENDEDOR) ─── -->
+    <template v-if="currentView === 'vendor-orders'">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h3 class="section-title mb-0"><i class="bi bi-bag-check me-2 text-primary"></i>Mis pedidos recibidos</h3>
+        <select class="form-select form-select-sm w-auto" v-model="vendorOrderFilter" @change="loadVendorOrders()">
+          <option value="">Todos los estados</option>
+          <option value="paid">Pagados — acción requerida</option>
+          <option value="processing">En proceso</option>
+          <option value="dispatched">Despachados</option>
+          <option value="completed">Completados</option>
+          <option value="dispute">En disputa</option>
+          <option value="cancelled">Cancelados</option>
+        </select>
+      </div>
+
+      <!-- Detalle de orden -->
+      <div v-if="selectedVendorOrder">
+        <button class="btn btn-outline-secondary btn-sm mb-3" @click="selectedVendorOrder=null">
+          <i class="bi bi-arrow-left me-1"></i>Volver a mis pedidos
+        </button>
+        <div class="row g-4">
+          <!-- Info orden + protocolo -->
+          <div class="col-md-8">
+            <!-- Header orden -->
+            <div class="bg-white rounded shadow-sm p-4 mb-3">
+              <div class="d-flex justify-content-between align-items-start mb-3">
+                <div>
+                  <h5 class="fw-bold mb-1">{{selectedVendorOrder.order_number}}</h5>
+                  <div class="text-muted small">{{formatDate(selectedVendorOrder.created_at)}}</div>
+                </div>
+                <span class="badge fs-6" :class="statusBadge(selectedVendorOrder.status)">
+                  {{statusLabel(selectedVendorOrder.status)}}
+                </span>
+              </div>
+              <!-- Datos comprador -->
+              <div class="bg-light rounded p-3 mb-3">
+                <div class="fw-bold small text-muted mb-2"><i class="bi bi-person me-1"></i>COMPRADOR</div>
+                <div class="fw-bold">{{selectedVendorOrder.buyer_name}}</div>
+                <div class="text-muted small">{{selectedVendorOrder.buyer_email}}</div>
+                <div class="text-muted small" v-if="selectedVendorOrder.buyer_rut">RUT: {{selectedVendorOrder.buyer_rut}}</div>
+                <div class="text-muted small" v-if="selectedVendorOrder.buyer_phone">Tel: {{selectedVendorOrder.buyer_phone}}</div>
+              </div>
+              <!-- Dirección -->
+              <div class="bg-light rounded p-3 mb-3" v-if="selectedVendorOrder.address_snapshot">
+                <div class="fw-bold small text-muted mb-2"><i class="bi bi-geo-alt me-1"></i>DIRECCIÓN DE ENTREGA</div>
+                <div class="fw-bold">{{JSON.parse(selectedVendorOrder.address_snapshot).full_name}}</div>
+                <div class="text-muted small">{{JSON.parse(selectedVendorOrder.address_snapshot).address}}</div>
+                <div class="text-muted small">{{JSON.parse(selectedVendorOrder.address_snapshot).city}}, {{JSON.parse(selectedVendorOrder.address_snapshot).region}}</div>
+              </div>
+              <!-- Productos -->
+              <h6 class="fw-bold mb-2">Productos</h6>
+              <div v-for="item in selectedVendorOrder.items" :key="item.id"
+                   class="d-flex gap-3 align-items-center py-2 border-bottom">
+                <img :src="item.image||'/uploads/no-image.png'" style="width:56px;height:56px;object-fit:contain;background:#f8f8f8" class="rounded border">
+                <div class="flex-grow-1">
+                  <div class="fw-bold small">{{item.title}}</div>
+                  <div class="text-muted small">SKU: {{item.sku||'—'}} · Cant: {{item.quantity}}</div>
+                </div>
+                <div class="text-end">
+                  <div class="fw-bold">{{formatCLP(item.subtotal)}}</div>
+                  <div class="text-muted small">{{formatCLP(item.price)}} c/u</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── PROTOCOLO DE SEGURIDAD ── -->
+            <div class="bg-white rounded shadow-sm p-4 mb-3">
+              <h6 class="fw-bold mb-3"><i class="bi bi-shield-check me-2 text-primary"></i>Protocolo de seguridad</h6>
+              <div class="d-flex flex-column gap-3">
+                <!-- Paso 1 -->
+                <div class="d-flex gap-3 align-items-start p-3 rounded"
+                     :class="getProtocolStepClass(1, selectedVendorOrder.status)">
+                  <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 fw-bold"
+                       style="width:36px;height:36px;font-size:.9rem"
+                       :class="isStepDone(1,selectedVendorOrder.status)?'bg-success text-white':'bg-light text-muted border'">
+                    <i class="bi bi-check-lg" v-if="isStepDone(1,selectedVendorOrder.status)"></i>
+                    <span v-else>1</span>
+                  </div>
+                  <div class="flex-grow-1">
+                    <div class="fw-bold small">Aceptar orden</div>
+                    <div class="text-muted" style="font-size:.78rem">Confirmas que tienes el producto disponible</div>
+                    <div v-if="['paid','pending'].includes(selectedVendorOrder.status)" class="mt-2">
+                      <button class="btn btn-success btn-sm fw-bold px-3" @click="vendorAcceptOrder(selectedVendorOrder.id)" :disabled="orderActionLoading">
+                        <span v-if="orderActionLoading" class="spinner-border spinner-border-sm me-1"></span>
+                        <i class="bi bi-check-circle me-1" v-else></i>Aceptar pedido
+                      </button>
+                    </div>
+                  </div>
+                  <span class="badge bg-success" v-if="isStepDone(1,selectedVendorOrder.status)">✓ Aceptado</span>
+                </div>
+                <!-- Paso 2 -->
+                <div class="d-flex gap-3 align-items-start p-3 rounded"
+                     :class="getProtocolStepClass(2, selectedVendorOrder.status)">
+                  <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 fw-bold"
+                       style="width:36px;height:36px;font-size:.9rem"
+                       :class="isStepDone(2,selectedVendorOrder.status)?'bg-success text-white':'bg-light text-muted border'">
+                    <i class="bi bi-check-lg" v-if="isStepDone(2,selectedVendorOrder.status)"></i>
+                    <span v-else>2</span>
+                  </div>
+                  <div class="flex-grow-1">
+                    <div class="fw-bold small">Confirmar despacho</div>
+                    <div class="text-muted" style="font-size:.78rem">Ingresa número de seguimiento del envío</div>
+                    <div v-if="selectedVendorOrder.status==='processing'" class="mt-2">
+                      <div class="row g-2 mb-2">
+                        <div class="col-md-6">
+                          <select class="form-select form-select-sm" v-model="dispatchForm.carrier">
+                            <option>Correos de Chile</option>
+                            <option>Starken</option>
+                            <option>Chilexpress</option>
+                            <option>Blue Express</option>
+                            <option>Shippify</option>
+                            <option>Retiro en tienda</option>
+                          </select>
+                        </div>
+                        <div class="col-md-6">
+                          <input type="text" class="form-control form-control-sm" v-model="dispatchForm.tracking" placeholder="Nº seguimiento (opcional)">
+                        </div>
+                      </div>
+                      <button class="btn btn-primary btn-sm fw-bold px-3" @click="vendorDispatchOrder(selectedVendorOrder.id)" :disabled="orderActionLoading">
+                        <i class="bi bi-truck me-1"></i>Confirmar despacho
+                      </button>
+                    </div>
+                    <div class="text-muted small mt-1" v-if="selectedVendorOrder.tracking_number">
+                      <i class="bi bi-truck me-1"></i>{{selectedVendorOrder.tracking_carrier}} · {{selectedVendorOrder.tracking_number}}
+                    </div>
+                  </div>
+                  <span class="badge bg-success" v-if="isStepDone(2,selectedVendorOrder.status)">✓ Despachado</span>
+                </div>
+                <!-- Paso 3 -->
+                <div class="d-flex gap-3 align-items-start p-3 rounded"
+                     :class="getProtocolStepClass(3, selectedVendorOrder.status)">
+                  <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 fw-bold"
+                       style="width:36px;height:36px;font-size:.9rem"
+                       :class="isStepDone(3,selectedVendorOrder.status)?'bg-success text-white':'bg-light text-muted border'">
+                    <i class="bi bi-check-lg" v-if="isStepDone(3,selectedVendorOrder.status)"></i>
+                    <span v-else>3</span>
+                  </div>
+                  <div class="flex-grow-1">
+                    <div class="fw-bold small">Comprador confirma recepción</div>
+                    <div class="text-muted" style="font-size:.78rem">
+                      El comprador confirma que recibió el pedido. Auto-confirma en 7 días.
+                      <span v-if="selectedVendorOrder.auto_complete_at"> · Fecha límite: {{formatDate(selectedVendorOrder.auto_complete_at)}}</span>
+                    </div>
+                  </div>
+                  <span class="badge bg-success" v-if="isStepDone(3,selectedVendorOrder.status)">✓ Recibido</span>
+                  <span class="badge bg-warning text-dark" v-else-if="['dispatched','in_transit'].includes(selectedVendorOrder.status)">Esperando</span>
+                </div>
+                <!-- Paso 4 -->
+                <div class="d-flex gap-3 align-items-start p-3 rounded"
+                     :class="selectedVendorOrder.status==='completed'?'bg-success bg-opacity-10 border-success border':'bg-light'">
+                  <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+                       style="width:36px;height:36px"
+                       :class="selectedVendorOrder.status==='completed'?'bg-success text-white':'bg-light text-muted border'">
+                    <i class="bi bi-cash-coin" v-if="selectedVendorOrder.status==='completed'"></i>
+                    <span v-else class="fw-bold" style="font-size:.9rem">4</span>
+                  </div>
+                  <div>
+                    <div class="fw-bold small">Fondos liberados</div>
+                    <div class="text-muted" style="font-size:.78rem">
+                      Recibes {{formatCLP(selectedVendorOrder.financials?.vendor_net)}} neto en tu cuenta
+                    </div>
+                  </div>
+                  <span class="badge bg-success ms-auto" v-if="selectedVendorOrder.status==='completed'">✓ Completado</span>
+                </div>
+              </div>
+
+              <!-- Cancelar orden -->
+              <div class="mt-3 pt-3 border-top" v-if="!['completed','cancelled','refunded'].includes(selectedVendorOrder.status)">
+                <button class="btn btn-outline-danger btn-sm" @click="showCancelOrder=true">
+                  <i class="bi bi-x-circle me-1"></i>Cancelar orden
+                </button>
+              </div>
+            </div>
+
+            <!-- Chat -->
+            <div class="bg-white rounded shadow-sm p-4">
+              <h6 class="fw-bold mb-3"><i class="bi bi-chat-dots me-2 text-primary"></i>Chat con el comprador</h6>
+              <div class="d-flex flex-column gap-2 mb-3" style="max-height:300px;overflow-y:auto" id="chatBox">
+                <div v-if="orderMessages.length===0" class="text-center text-muted small py-3">
+                  Sin mensajes aún. Inicia la conversación.
+                </div>
+                <div v-for="msg in orderMessages" :key="msg.id"
+                     class="d-flex gap-2" :class="msg.sender_id==auth.user?.id?'flex-row-reverse':''">
+                  <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center flex-shrink-0"
+                       style="width:32px;height:32px;color:white;font-size:.8rem">
+                    {{msg.sender_name?.charAt(0)}}
+                  </div>
+                  <div class="p-2 rounded" style="max-width:70%"
+                       :class="msg.sender_id==auth.user?.id?'bg-primary text-white':'bg-light'">
+                    <div style="font-size:.85rem">{{msg.message}}</div>
+                    <div style="font-size:.7rem;opacity:.7">{{formatDate(msg.created_at)}}</div>
+                  </div>
+                </div>
+              </div>
+              <div class="d-flex gap-2">
+                <input type="text" class="form-control" v-model="chatMessage"
+                       placeholder="Escribe un mensaje..." @keyup.enter="sendOrderMessage(selectedVendorOrder.id)">
+                <button class="btn btn-primary" @click="sendOrderMessage(selectedVendorOrder.id)" :disabled="!chatMessage.trim()">
+                  <i class="bi bi-send-fill"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sidebar financiero -->
+          <div class="col-md-4">
+            <div class="bg-white rounded shadow-sm p-4 sticky-top" style="top:80px">
+              <h6 class="fw-bold mb-3"><i class="bi bi-calculator me-2 text-primary"></i>Desglose financiero</h6>
+              <div v-if="selectedVendorOrder.financials">
+                <div class="d-flex justify-content-between mb-2 small">
+                  <span class="text-muted">Precio de venta</span>
+                  <span class="fw-bold">{{formatCLP(selectedVendorOrder.total)}}</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2 small text-muted">
+                  <span>IVA incluido (19%)</span>
+                  <span>{{formatCLP(selectedVendorOrder.financials.iva_amount)}}</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2 small text-muted">
+                  <span>Subtotal neto</span>
+                  <span>{{formatCLP(selectedVendorOrder.financials.subtotal_neto)}}</span>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between mb-2 small text-danger">
+                  <span>Comisión MercadoSordo (5%)</span>
+                  <span>- {{formatCLP(selectedVendorOrder.financials.commission_amount)}}</span>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between fw-bold">
+                  <span>Recibes tú</span>
+                  <span class="text-success fs-5">{{formatCLP(selectedVendorOrder.financials.vendor_net)}}</span>
+                </div>
+                <div class="mt-3 p-2 bg-light rounded small text-muted text-center">
+                  IVA 19% incluido en el precio de venta
+                </div>
+              </div>
+              <!-- Tracking -->
+              <div class="mt-4" v-if="selectedVendorOrder.tracking?.length">
+                <h6 class="fw-bold mb-2 small text-muted">HISTORIAL</h6>
+                <div v-for="t in selectedVendorOrder.tracking" :key="t.id" class="d-flex gap-2 mb-2 small">
+                  <i class="bi bi-circle-fill text-primary mt-1 flex-shrink-0" style="font-size:.5rem"></i>
+                  <div>
+                    <div class="fw-bold">{{statusLabel(t.status)}}</div>
+                    <div class="text-muted">{{t.description}}</div>
+                    <div class="text-muted" style="font-size:.7rem">{{formatDate(t.created_at)}}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal cancelar -->
+        <div v-if="showCancelOrder" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9001;display:flex;align-items:center;justify-content:center;padding:1rem">
+          <div class="bg-white rounded p-4 shadow" style="max-width:400px;width:100%">
+            <h5 class="fw-bold text-danger mb-3"><i class="bi bi-x-circle me-2"></i>Cancelar orden</h5>
+            <p class="text-muted small mb-3">¿Seguro que deseas cancelar la orden <strong>{{selectedVendorOrder.order_number}}</strong>? Se restaurará el stock.</p>
+            <textarea class="form-control mb-3" rows="2" v-model="cancelReason" placeholder="Motivo de cancelación..."></textarea>
+            <div class="d-flex gap-2">
+              <button class="btn btn-outline-secondary" @click="showCancelOrder=false">Volver</button>
+              <button class="btn btn-danger fw-bold" @click="doCancelOrder(selectedVendorOrder.id)">
+                Sí, cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lista de pedidos -->
+      <div v-else>
+        <div v-if="vendorOrdersLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+        <div v-else>
+          <div v-if="vendorOrders.length===0" class="text-center py-5 bg-white rounded shadow-sm">
+            <i class="bi bi-bag" style="font-size:3rem;color:#ccc"></i>
+            <p class="mt-3 fw-bold">Sin pedidos aún</p>
+            <p class="text-muted small">Cuando alguien compre tus productos aparecerán aquí.</p>
+          </div>
+          <div v-for="o in vendorOrders" :key="o.id"
+               class="bg-white rounded shadow-sm p-4 mb-3"
+               style="cursor:pointer;transition:box-shadow .15s"
+               @mouseenter="$event.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,.12)'"
+               @mouseleave="$event.currentTarget.style.boxShadow=''"
+               @click="loadVendorOrderDetail(o.id)">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <div>
+                <div class="fw-bold">{{o.order_number}}</div>
+                <div class="text-muted small">{{formatDate(o.created_at)}} · {{o.items_count}} producto(s)</div>
+                <div class="text-muted small"><i class="bi bi-person me-1"></i>{{o.buyer_name}}</div>
+              </div>
+              <div class="text-end">
+                <span class="badge mb-1 d-block" :class="statusBadge(o.status)">{{statusLabel(o.status)}}</span>
+                <div class="fw-bold text-primary">{{formatCLP(o.total)}}</div>
+              </div>
+            </div>
+            <!-- Alerta acción requerida -->
+            <div class="alert alert-warning py-1 px-2 mb-0 small" v-if="o.status==='paid'">
+              <i class="bi bi-exclamation-triangle me-1"></i>
+              Acción requerida — acepta o cancela este pedido
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- ─── NOTIFICACIONES ─── -->
+    <template v-if="currentView === 'notifications'">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="section-title mb-0"><i class="bi bi-bell me-2 text-primary"></i>Centro de notificaciones
+          <span class="badge bg-danger ms-2" v-if="unreadCount>0">{{unreadCount}}</span>
+        </h3>
+        <button class="btn btn-outline-secondary btn-sm" @click="markAllNotifRead" v-if="unreadCount>0">
+          <i class="bi bi-check2-all me-1"></i>Marcar todas como leídas
+        </button>
+      </div>
+      <div v-if="notifsLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+      <div v-else>
+        <div v-if="notifications.length===0" class="text-center py-5 bg-white rounded shadow-sm">
+          <i class="bi bi-bell-slash" style="font-size:3rem;color:#ccc"></i>
+          <p class="mt-3 text-muted">Sin notificaciones</p>
+        </div>
+        <div v-for="n in notifications" :key="n.id"
+             class="rounded p-3 mb-2 d-flex gap-3 align-items-start"
+             :style="!n.read_at
+               ? 'cursor:pointer;background:rgba(27,79,138,0.08);border-left:4px solid #1B4F8A;transition:background .2s'
+               : 'cursor:pointer;background:white;border-left:4px solid transparent;transition:background .2s;opacity:.75'"
+             @mouseenter="$event.currentTarget.style.background=!n.read_at?'rgba(27,79,138,0.14)':'rgba(0,0,0,0.03)'"
+             @mouseleave="$event.currentTarget.style.background=!n.read_at?'rgba(27,79,138,0.08)':'white'"
+             @click="readNotif(n)">
+          <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+               style="width:42px;height:42px"
+               :style="'background:var(--ms-'+n.color+',#1B4F8A)20'">
+            <i :class="'bi '+n.icon" :style="'font-size:1.15rem;color:var(--ms-'+n.color+',#1B4F8A)'"></i>
+          </div>
+          <div class="flex-grow-1">
+            <div class="small" :class="!n.read_at?'fw-bold':'text-muted'">{{n.title}}</div>
+            <div class="text-muted small mt-1">{{n.body}}</div>
+            <div class="text-muted mt-1 d-flex align-items-center gap-2" style="font-size:.72rem">
+              <i class="bi bi-clock"></i>{{formatDate(n.created_at)}}
+              <span v-if="n.entity_id" class="badge bg-primary bg-opacity-10 text-primary" style="font-size:.65rem">
+                Ver detalle →
+              </span>
+            </div>
+          </div>
+          <span style="font-size:1.2rem;line-height:1;flex-shrink:0" v-if="!n.read_at">👋🏻</span>
+        </div>
+      </div>
+    </template>
+
   <!-- ─── CART VIEW ─── -->
   <div class="container py-4" v-if="currentView === 'cart'">
     <h2 class="section-title mb-4">Tu carrito ({{ cart.count }})</h2>
@@ -2424,59 +2857,300 @@
     <div class="flex-grow-1 p-4" style="background:var(--ms-bg); min-height:100vh">
       <!-- Dashboard -->
       <template v-if="adminView === 'dashboard'">
-        <h2 class="section-title mb-4">Dashboard</h2>
-        <div class="row g-3 mb-4">
-          <div class="col-6 col-lg-3">
-            <div class="stat-card">
-              <div class="text-muted small">Usuarios totales</div>
-              <div class="stat-value">{{ adminDash.users_total || 0 }}</div>
-              <small class="text-success">+{{ adminDash.users_today || 0 }} hoy</small>
-            </div>
-          </div>
-          <div class="col-6 col-lg-3">
+        <div class="d-flex align-items-center justify-content-between mb-4">
+          <h2 class="section-title mb-0"><i class="bi bi-speedometer2 me-2"></i>Dashboard</h2>
+          <span class="text-muted small"><i class="bi bi-clock me-1"></i>Actualizado ahora</span>
+        </div>
+
+        <!-- ── KPIs Fila 1: Ingresos ─────────────────────────────────── -->
+        <div class="row g-3 mb-3">
+          <div class="col-6 col-xl-3">
             <div class="stat-card green">
-              <div class="text-muted small">Ingresos hoy</div>
-              <div class="stat-value">{{ formatCLP(adminDash.revenue_today || 0) }}</div>
-              <small class="text-muted">{{ formatCLP(adminDash.revenue_month || 0) }} este mes</small>
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small fw-bold">INGRESOS TOTALES</div>
+                  <div class="stat-value">{{ formatCLP(adminDash.kpis?.revenue_total || 0) }}</div>
+                  <small class="text-success">{{ formatCLP(adminDash.kpis?.revenue_month || 0) }} este mes</small>
+                </div>
+                <div class="rounded-circle bg-success bg-opacity-10 d-flex align-items-center justify-content-center" style="width:44px;height:44px">
+                  <i class="bi bi-cash-stack text-success fs-5"></i>
+                </div>
+              </div>
+              <div class="mt-2 pt-2 border-top d-flex gap-3">
+                <div><div class="text-muted" style="font-size:.7rem">HOY</div><div class="fw-bold small text-success">{{ formatCLP(adminDash.kpis?.revenue_today || 0) }}</div></div>
+                <div><div class="text-muted" style="font-size:.7rem">SEMANA</div><div class="fw-bold small">{{ formatCLP(adminDash.kpis?.revenue_week || 0) }}</div></div>
+                <div><div class="text-muted" style="font-size:.7rem">COMISIÓN</div><div class="fw-bold small text-primary">{{ formatCLP(adminDash.kpis?.commission_total || 0) }}</div></div>
+              </div>
             </div>
           </div>
-          <div class="col-6 col-lg-3">
+          <div class="col-6 col-xl-3">
+            <div class="stat-card">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small fw-bold">ÓRDENES</div>
+                  <div class="stat-value">{{ adminDash.kpis?.orders_total || 0 }}</div>
+                  <small class="text-muted">{{ adminDash.kpis?.orders_week || 0 }} esta semana</small>
+                </div>
+                <div class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" style="width:44px;height:44px">
+                  <i class="bi bi-bag-check text-primary fs-5"></i>
+                </div>
+              </div>
+              <div class="mt-2 pt-2 border-top d-flex gap-3">
+                <div><div class="text-muted" style="font-size:.7rem">HOY</div><div class="fw-bold small">{{ adminDash.kpis?.orders_today || 0 }}</div></div>
+                <div><div class="text-muted" style="font-size:.7rem">PENDIENTES</div><div class="fw-bold small text-warning">{{ adminDash.kpis?.orders_pending || 0 }}</div></div>
+                <div><div class="text-muted" style="font-size:.7rem">DISPUTAS</div><div class="fw-bold small text-danger">{{ adminDash.kpis?.orders_dispute || 0 }}</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
             <div class="stat-card yellow">
-              <div class="text-muted small">Productos activos</div>
-              <div class="stat-value">{{ adminDash.products_total || 0 }}</div>
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small fw-bold">USUARIOS</div>
+                  <div class="stat-value">{{ adminDash.kpis?.users_total || 0 }}</div>
+                  <small class="text-muted">{{ adminDash.kpis?.sellers_total || 0 }} vendedores</small>
+                </div>
+                <div class="rounded-circle bg-warning bg-opacity-10 d-flex align-items-center justify-content-center" style="width:44px;height:44px">
+                  <i class="bi bi-people text-warning fs-5"></i>
+                </div>
+              </div>
+              <div class="mt-2 pt-2 border-top d-flex gap-3">
+                <div><div class="text-muted" style="font-size:.7rem">HOY</div><div class="fw-bold small text-success">+{{ adminDash.kpis?.users_today || 0 }}</div></div>
+                <div><div class="text-muted" style="font-size:.7rem">SEMANA</div><div class="fw-bold small">+{{ adminDash.kpis?.users_week || 0 }}</div></div>
+              </div>
             </div>
           </div>
-          <div class="col-6 col-lg-3">
-            <div class="stat-card red">
-              <div class="text-muted small">Órdenes hoy</div>
-              <div class="stat-value">{{ adminDash.orders_today || 0 }}</div>
+          <div class="col-6 col-xl-3">
+            <div class="stat-card">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="text-muted small fw-bold">REPUTACIÓN</div>
+                  <div class="stat-value d-flex align-items-center gap-2">
+                    {{ adminDash.kpis?.avg_rating || '—' }}
+                    <i class="bi bi-star-fill text-warning" style="font-size:1rem"></i>
+                  </div>
+                  <small class="text-muted">{{ adminDash.kpis?.total_reviews || 0 }} reseñas</small>
+                </div>
+                <div class="rounded-circle bg-warning bg-opacity-10 d-flex align-items-center justify-content-center" style="width:44px;height:44px">
+                  <i class="bi bi-star-half text-warning fs-5"></i>
+                </div>
+              </div>
+              <!-- Rating dist -->
+              <div class="mt-2 pt-2 border-top">
+                <div v-for="r in (adminDash.rating_dist||[])" :key="r.rating" class="d-flex align-items-center gap-1 mb-1">
+                  <span style="font-size:.65rem;width:8px">{{ r.rating }}</span>
+                  <i class="bi bi-star-fill text-warning" style="font-size:.55rem"></i>
+                  <div class="flex-grow-1 bg-light rounded" style="height:5px">
+                    <div class="bg-warning rounded" :style="'height:5px;width:'+Math.min(100,(r.count/(adminDash.kpis?.total_reviews||1))*100)+'%'"></div>
+                  </div>
+                  <span style="font-size:.65rem;width:20px">{{ r.count }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-        <div class="row g-3">
+
+        <!-- ── Gráfico + Estados órdenes ─────────────────────────────── -->
+        <div class="row g-3 mb-3">
           <div class="col-md-8">
-            <div class="bg-white rounded p-4 shadow-sm">
-              <h6 class="fw-bold mb-3">Órdenes recientes</h6>
-              <table class="table table-sm">
-                <thead><tr><th>#</th><th>Comprador</th><th>Total</th><th>Estado</th></tr></thead>
-                <tbody>
-                  <tr v-for="o in adminDash.recent_orders" :key="o.id">
-                    <td class="fw-bold">{{ o.order_number }}</td>
-                    <td>{{ o.buyer }}</td>
-                    <td>{{ formatCLP(o.total) }}</td>
-                    <td><span class="badge" :class="statusBadge(o.status)">{{ statusLabel(o.status) }}</span></td>
-                  </tr>
-                </tbody>
-              </table>
+            <div class="bg-white rounded shadow-sm p-4">
+              <h6 class="fw-bold mb-3"><i class="bi bi-graph-up me-2 text-primary"></i>Ingresos últimos 30 días</h6>
+              <div v-if="!adminDash.revenue_chart?.length" class="text-center text-muted py-4 small">Sin datos suficientes aún</div>
+              <div v-else style="height:160px;position:relative">
+                <svg width="100%" height="160" :viewBox="'0 0 '+(adminDash.revenue_chart.length*30)+' 160'">
+                  <defs>
+                    <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#1B4F8A" stop-opacity="0.3"/>
+                      <stop offset="100%" stop-color="#1B4F8A" stop-opacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  <template v-if="adminDash.revenue_chart?.length">
+                    <polyline
+                      :points="adminDash.revenue_chart.map((d,i) => (i*30+15)+','+(140 - (d.total / Math.max(...adminDash.revenue_chart.map(x=>x.total))) * 120)).join(' ')"
+                      fill="none" stroke="#1B4F8A" stroke-width="2.5" stroke-linejoin="round"/>
+                    <circle v-for="(d,i) in adminDash.revenue_chart" :key="i"
+                      :cx="i*30+15" :cy="140 - (d.total / Math.max(...adminDash.revenue_chart.map(x=>x.total))) * 120"
+                      r="3" fill="#1B4F8A"/>
+                  </template>
+                </svg>
+              </div>
+              <div class="d-flex justify-content-between mt-1">
+                <span class="text-muted" style="font-size:.7rem">{{ adminDash.revenue_chart?.[0]?.date }}</span>
+                <span class="text-muted" style="font-size:.7rem">{{ adminDash.revenue_chart?.[adminDash.revenue_chart.length-1]?.date }}</span>
+              </div>
             </div>
           </div>
           <div class="col-md-4">
-            <div class="bg-white rounded p-4 shadow-sm">
-              <h6 class="fw-bold mb-3">Top Productos</h6>
-              <div v-for="(p,i) in adminDash.top_products" :key="i" class="d-flex justify-content-between mb-2">
-                <span class="small text-truncate" style="max-width:60%">{{ p.title }}</span>
-                <span class="badge bg-primary">{{ p.sales_count }} ventas</span>
+            <div class="bg-white rounded shadow-sm p-4 h-100">
+              <h6 class="fw-bold mb-3"><i class="bi bi-pie-chart me-2 text-primary"></i>Órdenes por estado</h6>
+              <div v-for="s in (adminDash.orders_by_status||[])" :key="s.status" class="mb-2">
+                <div class="d-flex justify-content-between mb-1">
+                  <span class="badge" :class="statusBadge(s.status)">{{ statusLabel(s.status) }}</span>
+                  <span class="fw-bold small">{{ s.count }}</span>
+                </div>
+                <div class="bg-light rounded" style="height:5px">
+                  <div class="rounded" :class="'bg-'+statusBadge(s.status).replace('bg-','').split(' ')[0]"
+                       :style="'height:5px;width:'+Math.min(100,(s.count/(adminDash.kpis?.orders_total||1))*100)+'%'"></div>
+                </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Top Vendedores + Compradores ──────────────────────────── -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <div class="bg-white rounded shadow-sm p-4">
+              <h6 class="fw-bold mb-3"><i class="bi bi-trophy me-2 text-warning"></i>Mejores vendedores</h6>
+              <div v-for="(s,i) in (adminDash.top_sellers||[])" :key="s.id" class="d-flex align-items-center gap-3 mb-3">
+                <div class="fw-bold text-muted" style="width:20px;font-size:.85rem">#{{ i+1 }}</div>
+                <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center flex-shrink-0"
+                     style="width:38px;height:38px;color:white;font-weight:700;font-size:.9rem">
+                  {{ s.name?.charAt(0) }}
+                </div>
+                <div class="flex-grow-1">
+                  <div class="fw-bold small">{{ s.name }}</div>
+                  <div class="text-muted" style="font-size:.73rem">
+                    {{ s.products_count }} productos · {{ s.total_sales }} ventas
+                  </div>
+                </div>
+                <div class="text-end">
+                  <div class="fw-bold small text-success">{{ formatCLP(s.total_revenue) }}</div>
+                  <div class="text-muted" style="font-size:.7rem">
+                    <i class="bi bi-star-fill text-warning" style="font-size:.6rem"></i>
+                    {{ s.avg_rating || '—' }}
+                  </div>
+                </div>
+              </div>
+              <div v-if="!adminDash.top_sellers?.length" class="text-center text-muted small py-3">Sin datos aún</div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="bg-white rounded shadow-sm p-4">
+              <h6 class="fw-bold mb-3"><i class="bi bi-award me-2 text-primary"></i>Mejores compradores</h6>
+              <div v-for="(b,i) in (adminDash.top_buyers||[])" :key="b.id" class="d-flex align-items-center gap-3 mb-3">
+                <div class="fw-bold text-muted" style="width:20px;font-size:.85rem">#{{ i+1 }}</div>
+                <div class="rounded-circle bg-success d-flex align-items-center justify-content-center flex-shrink-0"
+                     style="width:38px;height:38px;color:white;font-weight:700;font-size:.9rem">
+                  {{ b.name?.charAt(0) }}
+                </div>
+                <div class="flex-grow-1">
+                  <div class="fw-bold small">{{ b.name }}</div>
+                  <div class="text-muted" style="font-size:.73rem">{{ b.orders_count }} órdenes</div>
+                </div>
+                <div class="fw-bold small text-primary">{{ formatCLP(b.total_spent) }}</div>
+              </div>
+              <div v-if="!adminDash.top_buyers?.length" class="text-center text-muted small py-3">Sin datos aún</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Top Productos más vendidos + más vistos ───────────────── -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <div class="bg-white rounded shadow-sm p-4">
+              <h6 class="fw-bold mb-3"><i class="bi bi-fire me-2 text-danger"></i>Productos más vendidos</h6>
+              <div v-for="(p,i) in (adminDash.top_selling||[])" :key="p.id"
+                   class="d-flex align-items-center gap-3 mb-2 pb-2 border-bottom">
+                <span class="fw-bold text-muted" style="width:20px;font-size:.8rem">#{{i+1}}</span>
+                <img :src="p.image||'/uploads/no-image.png'"
+                     style="width:40px;height:40px;object-fit:contain;background:#f0f4fb;border-radius:6px">
+                <div class="flex-grow-1 overflow-hidden">
+                  <div class="fw-bold small text-truncate">{{ p.title }}</div>
+                  <div class="text-muted" style="font-size:.72rem">
+                    <i class="bi bi-shop me-1"></i>{{ p.seller_name }}
+                    · <i class="bi bi-star-fill text-warning" style="font-size:.6rem"></i> {{ p.rating_avg || '—' }}
+                  </div>
+                </div>
+                <div class="text-end flex-shrink-0">
+                  <div class="fw-bold small text-primary">{{ formatCLP(p.price) }}</div>
+                  <div class="badge bg-danger" style="font-size:.65rem">{{ p.sales_count }} ventas</div>
+                </div>
+              </div>
+              <div v-if="!adminDash.top_selling?.length" class="text-center text-muted small py-3">Sin datos aún</div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="bg-white rounded shadow-sm p-4">
+              <h6 class="fw-bold mb-3"><i class="bi bi-eye me-2 text-info"></i>Productos más vistos</h6>
+              <div v-for="(p,i) in (adminDash.top_viewed||[])" :key="p.id"
+                   class="d-flex align-items-center gap-3 mb-2 pb-2 border-bottom">
+                <span class="fw-bold text-muted" style="width:20px;font-size:.8rem">#{{i+1}}</span>
+                <img :src="p.image||'/uploads/no-image.png'"
+                     style="width:40px;height:40px;object-fit:contain;background:#f0f4fb;border-radius:6px">
+                <div class="flex-grow-1 overflow-hidden">
+                  <div class="fw-bold small text-truncate">{{ p.title }}</div>
+                  <div class="text-muted" style="font-size:.72rem">
+                    <i class="bi bi-shop me-1"></i>{{ p.seller_name }}
+                  </div>
+                </div>
+                <div class="text-end flex-shrink-0">
+                  <div class="fw-bold small text-primary">{{ formatCLP(p.price) }}</div>
+                  <div class="badge bg-info text-white" style="font-size:.65rem">
+                    <i class="bi bi-eye-fill me-1"></i>{{ p.views }}
+                  </div>
+                </div>
+              </div>
+              <div v-if="!adminDash.top_viewed?.length" class="text-center text-muted small py-3">Sin datos aún</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Favoritos + Categorías + Órdenes recientes ────────────── -->
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="bg-white rounded shadow-sm p-4">
+              <h6 class="fw-bold mb-3"><i class="bi bi-heart me-2 text-danger"></i>Más agregados a favoritos</h6>
+              <div v-for="(p,i) in (adminDash.top_favorites||[])" :key="p.id"
+                   class="d-flex align-items-center gap-2 mb-2">
+                <span class="fw-bold text-muted" style="width:16px;font-size:.75rem">#{{i+1}}</span>
+                <img :src="p.image||'/uploads/no-image.png'"
+                     style="width:34px;height:34px;object-fit:contain;background:#f0f4fb;border-radius:6px">
+                <div class="flex-grow-1 overflow-hidden">
+                  <div class="small text-truncate fw-bold">{{ p.title }}</div>
+                  <div class="text-muted" style="font-size:.7rem">{{ formatCLP(p.price) }}</div>
+                </div>
+                <span class="badge bg-danger bg-opacity-10 text-danger" style="font-size:.65rem">
+                  <i class="bi bi-heart-fill me-1"></i>{{ p.wishlist_count || 0 }}
+                </span>
+              </div>
+              <div v-if="!adminDash.top_favorites?.length" class="text-center text-muted small py-3">Sin datos aún</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="bg-white rounded shadow-sm p-4">
+              <h6 class="fw-bold mb-3"><i class="bi bi-tags me-2 text-primary"></i>Categorías más activas</h6>
+              <div v-for="cat in (adminDash.top_categories||[])" :key="cat.name" class="mb-2">
+                <div class="d-flex justify-content-between mb-1">
+                  <span class="small fw-bold">{{ cat.name }}</span>
+                  <span class="small text-muted">{{ cat.sales }} ventas</span>
+                </div>
+                <div class="bg-light rounded" style="height:6px">
+                  <div class="bg-primary rounded" style="height:6px;transition:width .5s"
+                       :style="'width:'+Math.min(100,(cat.sales/Math.max(...(adminDash.top_categories||[{sales:1}]).map(c=>c.sales||1)))*100)+'%'">
+                  </div>
+                </div>
+              </div>
+              <div v-if="!adminDash.top_categories?.length" class="text-center text-muted small py-3">Sin datos aún</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="bg-white rounded shadow-sm p-4">
+              <h6 class="fw-bold mb-3"><i class="bi bi-clock-history me-2 text-primary"></i>Actividad reciente</h6>
+              <div v-for="o in (adminDash.recent_orders||[])" :key="o.order_number"
+                   class="d-flex justify-content-between align-items-start mb-2 pb-2 border-bottom">
+                <div>
+                  <div class="fw-bold" style="font-size:.78rem">{{ o.order_number }}</div>
+                  <div class="text-muted" style="font-size:.7rem">{{ o.buyer_name }}</div>
+                </div>
+                <div class="text-end">
+                  <div class="fw-bold small">{{ formatCLP(o.total) }}</div>
+                  <span class="badge" :class="statusBadge(o.status)" style="font-size:.6rem">
+                    {{ statusLabel(o.status) }}
+                  </span>
+                </div>
+              </div>
+              <div v-if="!adminDash.recent_orders?.length" class="text-center text-muted small py-3">Sin órdenes aún</div>
             </div>
           </div>
         </div>
@@ -3500,6 +4174,168 @@ const app = createApp({
       }
     }
 
+    // ── Gestión de órdenes vendedor ────────────────────────────────────────
+    const vendorOrders       = ref([]);
+    const vendorOrdersLoading = ref(false);
+    const vendorOrderFilter  = ref('');
+    const selectedVendorOrder = ref(null);
+    const vendorOrdersBadge  = ref(0);
+    const orderActionLoading = ref(false);
+    const dispatchForm       = ref({ carrier: 'Correos de Chile', tracking: '' });
+    const showCancelOrder    = ref(false);
+    const cancelReason       = ref('');
+    const orderMessages      = ref([]);
+    const chatMessage        = ref('');
+
+    // ── Notificaciones ──────────────────────────────────────────────────
+    const notifications  = ref([]);
+    const unreadCount    = ref(0);
+    const notifsLoading  = ref(false);
+
+    // Helpers protocolo
+    const protocolSteps = {
+      paid: 1, processing: 2, dispatched: 3,
+      in_transit: 3, delivered: 3, completed: 4
+    };
+    function isStepDone(step, status) {
+      return (protocolSteps[status] || 0) >= step;
+    }
+    function getProtocolStepClass(step, status) {
+      const cur = protocolSteps[status] || 0;
+      if (cur >= step) return 'bg-success bg-opacity-10 border border-success rounded';
+      if (cur === step - 1) return 'border border-primary rounded';
+      return 'bg-light rounded';
+    }
+
+    async function loadVendorOrders() {
+      vendorOrdersLoading.value = true;
+      try {
+        const r = await api('GET', `/vendor/orders${vendorOrderFilter.value ? '?status=' + vendorOrderFilter.value : ''}`);
+        vendorOrders.value      = r.data || [];
+        vendorOrdersBadge.value = vendorOrders.value.filter(o => o.status === 'paid').length;
+      } catch {}
+      finally { vendorOrdersLoading.value = false; }
+    }
+
+    async function loadVendorOrderDetail(id) {
+      try {
+        selectedVendorOrder.value = await api('GET', `/vendor/orders/${id}`);
+        orderMessages.value = selectedVendorOrder.value.messages || [];
+        window.scrollTo(0, 0);
+      } catch { toast('Error al cargar pedido.', 'error'); }
+    }
+
+    async function vendorAcceptOrder(id) {
+      orderActionLoading.value = true;
+      try {
+        await api('POST', `/vendor/orders/${id}/accept`);
+        await loadVendorOrderDetail(id);
+        toast('✅ Orden aceptada. Comprador notificado.');
+      } catch (e) { toast(e.error || 'Error.', 'error'); }
+      finally { orderActionLoading.value = false; }
+    }
+
+    async function vendorDispatchOrder(id) {
+      orderActionLoading.value = true;
+      try {
+        await api('POST', `/vendor/orders/${id}/dispatch`, dispatchForm.value);
+        await loadVendorOrderDetail(id);
+        toast('🚚 Despacho confirmado. Comprador notificado.');
+        dispatchForm.value = { carrier: 'Correos de Chile', tracking: '' };
+      } catch (e) { toast(e.error || 'Error.', 'error'); }
+      finally { orderActionLoading.value = false; }
+    }
+
+    async function doCancelOrder(id) {
+      try {
+        await api('POST', `/vendor/orders/${id}/cancel`, { reason: cancelReason.value });
+        showCancelOrder.value = false;
+        cancelReason.value    = '';
+        selectedVendorOrder.value = null;
+        await loadVendorOrders();
+        toast('Orden cancelada.');
+      } catch (e) { toast(e.error || 'Error.', 'error'); }
+    }
+
+    async function sendOrderMessage(orderId) {
+      if (!chatMessage.value.trim()) return;
+      try {
+        const r = await api('POST', `/orders/${orderId}/messages`, { message: chatMessage.value });
+        orderMessages.value.push(r.message);
+        chatMessage.value = '';
+        setTimeout(() => {
+          const box = document.getElementById('chatBox');
+          if (box) box.scrollTop = box.scrollHeight;
+        }, 100);
+      } catch { toast('Error al enviar mensaje.', 'error'); }
+    }
+
+    // ── Notificaciones ────────────────────────────────────────────────────
+    async function loadNotifications() {
+      notifsLoading.value = true;
+      try {
+        const r = await api('GET', '/notifications');
+        notifications.value = r.data || [];
+        unreadCount.value   = r.unread_count || 0;
+      } catch {}
+      finally { notifsLoading.value = false; }
+    }
+
+    async function loadUnreadCount() {
+      try {
+        const r = await api('GET', '/notifications?unread=1');
+        unreadCount.value = r.unread_count || 0;
+      } catch {}
+    }
+
+    async function readNotif(notif) {
+      if (!notif.read_at) {
+        await api('PATCH', `/notifications/${notif.id}/read`).catch(() => {});
+        notif.read_at = new Date().toISOString();
+        unreadCount.value = Math.max(0, unreadCount.value - 1);
+      }
+      if (!notif.entity_id) return;
+
+      // Navegar según tipo de entidad
+      if (notif.entity_type === 'order') {
+        // Detectar si es notificación para vendedor o comprador
+        const vendorTypes = ['order_accepted','order_dispatched','order_completed','new_message','dispute_opened'];
+        const isVendorNotif = vendorTypes.includes(notif.type);
+
+        if (isVendorNotif) {
+          // Ir a Mis Pedidos y abrir el detalle
+          navigate('vendor-orders');
+          await new Promise(r => setTimeout(r, 300));
+          await loadVendorOrderDetail(notif.entity_id);
+        } else {
+          // Ir a Mis Compras y abrir el comprobante
+          navigate('orders');
+          await new Promise(r => setTimeout(r, 300));
+          await loadOrderDetail(notif.entity_id);
+        }
+      }
+    }
+
+    async function markAllNotifRead() {
+      await api('POST', '/notifications/read-all').catch(() => {});
+      notifications.value.forEach(n => n.read_at = n.read_at || new Date().toISOString());
+      unreadCount.value = 0;
+      toast('Todas marcadas como leídas.');
+    }
+
+    // Comprador confirma recepción
+    function openDisputeModal(orderId) {
+      toast('Función de disputa próximamente.', 'warning');
+    }
+
+    async function confirmOrderReceived(orderId) {
+      try {
+        await api('POST', `/orders/${orderId}/confirm`);
+        toast('✅ Recepción confirmada. Fondos liberados al vendedor.');
+        await loadOrders();
+      } catch (e) { toast(e.error || 'Error.', 'error'); }
+    }
+
     const adminDash = ref({});
     const adminUsers = ref([]);
     const adminProducts = ref([]);
@@ -3539,10 +4375,34 @@ const app = createApp({
     }
 
     function statusBadge(s) {
-      return { 'bg-warning text-dark': s === 'pending', 'bg-info': s === 'paid', 'bg-primary': s === 'processing', 'bg-success': s === 'delivered', 'bg-danger': s === 'cancelled', 'bg-secondary': true }[s] || 'bg-secondary';
+      const map = {
+        pending:     'bg-warning text-dark',
+        paid:        'bg-info text-white',
+        processing:  'bg-primary',
+        dispatched:  'bg-primary',
+        in_transit:  'bg-info text-white',
+        delivered:   'bg-success',
+        completed:   'bg-success',
+        dispute:     'bg-danger',
+        cancelled:   'bg-secondary',
+        refunded:    'bg-warning text-dark',
+      };
+      return map[s] || 'bg-secondary';
     }
     function statusLabel(s) {
-      return { pending:'Pendiente', paid:'Pagado', processing:'En proceso', shipped:'Enviado', delivered:'Entregado', cancelled:'Cancelado', refunded:'Reembolsado' }[s] || s;
+      const map = {
+        pending:    'Pendiente',
+        paid:       'Pago recibido',
+        processing: 'Aceptado — preparando',
+        dispatched: 'Despachado',
+        in_transit: 'En camino',
+        delivered:  'Entregado',
+        completed:  'Completado',
+        dispute:    'En disputa',
+        cancelled:  'Cancelado',
+        refunded:   'Reembolsado',
+      };
+      return map[s] || s;
     }
 
     function navigate(view) {
@@ -3552,7 +4412,9 @@ const app = createApp({
       if (view === 'products') loadProducts();
       if (view === 'cart') loadCart();
       if (view === 'orders') { selectedOrder.value = null; loadOrders(); }
-      if (view === 'my-products') { sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus(); }
+      if (view === 'my-products')    { sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus(); }
+      if (view === 'vendor-orders')  { selectedVendorOrder.value = null; loadVendorOrders(); }
+      if (view === 'notifications')  { loadNotifications(); }
       if (view === 'profile')  { profileTab.value = 'data'; initProfileData(); loadAddresses(); loadPaymentMethods(); }
       if (view === 'checkout') { initCheckout(); loadAddresses(); }
       if (view === 'admin') { adminView.value = 'dashboard'; loadDashboard(); }
@@ -3604,7 +4466,7 @@ const app = createApp({
       toast('Sesión cerrada.');
     }
 
-    // ─── Products ──────────────────────────────────────────
+    // ─── Products ─────_─────────────────────────────────────
     async function loadProducts(featured = false) {
       products.value.loading = true;
       try {
@@ -3670,6 +4532,14 @@ const app = createApp({
     }
 
     async function addToCart(product, qty = 1) {
+      // Bloquear admin
+      if (auth.value.user?.role === 'admin') {
+        toast('Los administradores no pueden realizar compras.', 'error'); return;
+      }
+      // Bloquear vendedor comprando sus propios productos
+      if (auth.value.user?.id && product.seller_id === auth.value.user.id) {
+        toast('No puedes comprar tus propios productos.', 'error'); return;
+      }
       if (!checkRut()) return;
       try {
         await api('POST', '/cart/items', { product_id: product.id, quantity: qty });
@@ -3717,13 +4587,19 @@ const app = createApp({
 
     async function loadOrderDetail(id) {
       try {
-        selectedOrder.value = await api('GET', `/orders/${id}`);
+        const r = await api('GET', `/orders/${id}`);
+        // Asegurar que tracking existe
+        if (!r.tracking) r.tracking = [];
+        selectedOrder.value = r;
       } catch { toast('Error al cargar el detalle.', 'error'); }
     }
 
     // ─── Admin ────────────────────────────────────────────
     async function loadDashboard() {
-      try { adminDash.value = await api('GET', '/admin/dashboard'); } catch {}
+      try {
+        const r = await api('GET', '/admin/dashboard');
+        adminDash.value = r;
+      } catch {}
     }
     async function loadAdminUsers() {
       try { adminUsers.value = (await api('GET', `/admin/users?q=${adminSearch.value}`)).data; } catch {}
@@ -3743,6 +4619,7 @@ const app = createApp({
 
     onMounted(async () => {
       await Promise.all([loadMe(), loadCategories(), loadProducts(true), loadCart()]);
+      if (auth.value.user) loadUnreadCount();
     });
 
     return {
@@ -3779,6 +4656,14 @@ const app = createApp({
       confirmDeleteProduct, doDeleteProduct, getCategoryName,
       updateAdminUser, updateOrderStatus,
       formatCLP, formatDate, statusBadge, statusLabel,
+      vendorOrders, vendorOrdersLoading, vendorOrderFilter, selectedVendorOrder,
+      vendorOrdersBadge, orderActionLoading, dispatchForm, showCancelOrder, cancelReason,
+      orderMessages, chatMessage,
+      loadVendorOrders, loadVendorOrderDetail, vendorAcceptOrder,
+      vendorDispatchOrder, doCancelOrder, sendOrderMessage,
+      isStepDone, getProtocolStepClass, confirmOrderReceived,
+      notifications, unreadCount, notifsLoading,
+      loadNotifications, readNotif, markAllNotifRead,
       checkoutStep, checkoutLoading, checkoutError, checkoutOrderId, checkoutAmount,
       checkoutOrderNumber, mpInitPoint, bankPayUrl, selectedAddressId, selectedPayMethod,
       mpStatus, connectMercadoPago, disconnectMercadoPago,
@@ -3791,5 +4676,14 @@ const app = createApp({
 
 app.mount('#app');
 </script>
+  <!-- FOOTER -->
+  <footer class="ms-footer" v-if="!isAdminRoute">
+    <span>© 2026 <strong style="color:rgba(255,255,255,.8)">MercadoSordo</strong></span>
+    <span class="mx-2">·</span>
+    <span>Developed by <a href="https://github.com/NacAbarca" target="_blank">Nac Abarca</a></span>
+    <span class="mx-2">·</span>
+    <span>PHP 8.2 · Vue 3 · Bootstrap 5</span>
+  </footer>
+
 </body>
 </html>
