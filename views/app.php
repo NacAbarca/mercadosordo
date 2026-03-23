@@ -737,11 +737,21 @@
               </div>
             </div>
 
+            <!-- Botones acción comprador -->
+            <div class="mt-3 d-flex gap-2" v-if="['dispatched','in_transit'].includes(selectedOrder.status)">
+              <button class="btn btn-success fw-bold" @click="confirmOrderReceived(selectedOrder.id)">
+                <i class="bi bi-check-circle me-1"></i>Confirmar recepción
+              </button>
+              <button class="btn btn-outline-warning btn-sm" @click="openDisputeModal(selectedOrder.id)">
+                <i class="bi bi-shield-exclamation me-1"></i>Abrir disputa
+              </button>
+            </div>
+
             <!-- Tracking -->
             <div class="mt-4" v-if="selectedOrder.tracking?.length">
               <h6 class="fw-bold mb-3"><i class="bi bi-truck me-2 text-primary"></i>Seguimiento</h6>
               <div class="d-flex flex-column gap-2">
-                <div v-for="t in selectedOrder.tracking" :key="t.id"
+                <div v-for="t in [...(selectedOrder.tracking||[])].reverse()" :key="t.id"
                      class="d-flex gap-3 align-items-start">
                   <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center flex-shrink-0"
                        style="width:28px;height:28px;font-size:.7rem;color:white">
@@ -2500,7 +2510,7 @@
                   <div class="flex-grow-1">
                     <div class="fw-bold small">Aceptar orden</div>
                     <div class="text-muted" style="font-size:.78rem">Confirmas que tienes el producto disponible</div>
-                    <div v-if="selectedVendorOrder.status==='paid'" class="mt-2">
+                    <div v-if="['paid','pending'].includes(selectedVendorOrder.status)" class="mt-2">
                       <button class="btn btn-success btn-sm fw-bold px-3" @click="vendorAcceptOrder(selectedVendorOrder.id)" :disabled="orderActionLoading">
                         <span v-if="orderActionLoading" class="spinner-border spinner-border-sm me-1"></span>
                         <i class="bi bi-check-circle me-1" v-else></i>Aceptar pedido
@@ -4287,6 +4297,10 @@ const app = createApp({
     }
 
     // Comprador confirma recepción
+    function openDisputeModal(orderId) {
+      toast('Función de disputa próximamente.', 'warning');
+    }
+
     async function confirmOrderReceived(orderId) {
       try {
         await api('POST', `/orders/${orderId}/confirm`);
@@ -4334,10 +4348,34 @@ const app = createApp({
     }
 
     function statusBadge(s) {
-      return { 'bg-warning text-dark': s === 'pending', 'bg-info': s === 'paid', 'bg-primary': s === 'processing', 'bg-success': s === 'delivered', 'bg-danger': s === 'cancelled', 'bg-secondary': true }[s] || 'bg-secondary';
+      const map = {
+        pending:     'bg-warning text-dark',
+        paid:        'bg-info text-white',
+        processing:  'bg-primary',
+        dispatched:  'bg-primary',
+        in_transit:  'bg-info text-white',
+        delivered:   'bg-success',
+        completed:   'bg-success',
+        dispute:     'bg-danger',
+        cancelled:   'bg-secondary',
+        refunded:    'bg-warning text-dark',
+      };
+      return map[s] || 'bg-secondary';
     }
     function statusLabel(s) {
-      return { pending:'Pendiente', paid:'Pagado', processing:'En proceso', shipped:'Enviado', delivered:'Entregado', cancelled:'Cancelado', refunded:'Reembolsado' }[s] || s;
+      const map = {
+        pending:    'Pendiente',
+        paid:       'Pago recibido',
+        processing: 'Aceptado — preparando',
+        dispatched: 'Despachado',
+        in_transit: 'En camino',
+        delivered:  'Entregado',
+        completed:  'Completado',
+        dispute:    'En disputa',
+        cancelled:  'Cancelado',
+        refunded:   'Reembolsado',
+      };
+      return map[s] || s;
     }
 
     function navigate(view) {
@@ -4514,7 +4552,10 @@ const app = createApp({
 
     async function loadOrderDetail(id) {
       try {
-        selectedOrder.value = await api('GET', `/orders/${id}`);
+        const r = await api('GET', `/orders/${id}`);
+        // Asegurar que tracking existe
+        if (!r.tracking) r.tracking = [];
+        selectedOrder.value = r;
       } catch { toast('Error al cargar el detalle.', 'error'); }
     }
 

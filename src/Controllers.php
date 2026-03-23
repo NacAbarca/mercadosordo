@@ -1475,13 +1475,38 @@ class OrderManagementController
         $db     = DB::getInstance();
         $page   = (int)$req->input('page', 1);
         $status = $req->input('status', '');
-        $uid = Auth::id();
-        $where = "(o.seller_id = ? OR EXISTS (SELECT 1 FROM order_items oi2 WHERE oi2.order_id = o.id AND oi2.seller_id = ?))";
+        // Buscar órdenes donde el usuario es vendedor
+        $uid      = Auth::id();
         $bindings = [$uid, $uid];
+        $where    = "(o.seller_id = ? OR EXISTS (SELECT 1 FROM order_items oi2 WHERE oi2.order_id = o.id AND oi2.seller_id = ?))";
         if ($status) { $where .= " AND o.status = ?"; $bindings[] = $status; }
-        $total = (int)($db->fetch("SELECT COUNT(DISTINCT o.id) AS c FROM orders o WHERE {$where}", $bindings)["c"] ?? 0);
-        $rows = $db->fetchAll("SELECT DISTINCT o.*, u.name AS buyer_name, u.email AS buyer_email, u.rut AS buyer_rut, (SELECT COUNT(*) FROM order_items WHERE order_id=o.id) AS items_count FROM orders o JOIN users u ON u.id = o.buyer_id WHERE {$where} ORDER BY o.created_at DESC LIMIT 20", $bindings);
-        $result = ["data"=>$rows,"total"=>$total,"per_page"=>20,"current_page"=>$page,"last_page"=>(int)ceil($total/20)];
+
+        $totalRow = $db->fetch(
+            "SELECT COUNT(DISTINCT o.id) AS c FROM orders o WHERE {$where}",
+            $bindings
+        );
+        $total = (int)($totalRow['c'] ?? 0);
+        $offset = ($page - 1) * 20;
+
+        $rows = $db->fetchAll(
+            "SELECT DISTINCT o.*,
+                u.name AS buyer_name, u.email AS buyer_email, u.rut AS buyer_rut,
+                (SELECT COUNT(*) FROM order_items WHERE order_id=o.id) AS items_count
+             FROM orders o
+             JOIN users u ON u.id = o.buyer_id
+             WHERE {$where}
+             ORDER BY o.created_at DESC
+             LIMIT 20 OFFSET {$offset}",
+            $bindings
+        );
+
+        $result = [
+            'data'         => $rows,
+            'total'        => $total,
+            'per_page'     => 20,
+            'current_page' => $page,
+            'last_page'    => (int)ceil($total / 20),
+        ];
         foreach ($result['data'] as &$order) {
             $fin = $this->calcFinancials((float)$order['total']);
             $order['financials'] = $fin;
@@ -1527,7 +1552,7 @@ class OrderManagementController
         $db = DB::getInstance();
         $order = $db->fetch("SELECT * FROM orders WHERE id=? AND (seller_id=? OR EXISTS(SELECT 1 FROM order_items oi WHERE oi.order_id=orders.id AND oi.seller_id=?))", [$id, Auth::id(), Auth::id()]);
         if (!$order) Response::json(['error' => 'Orden no encontrada.'], 404);
-        if ($order['status'] !== 'paid') Response::json(['error' => 'Solo puedes aceptar órdenes pagadas.'], 400);
+        if (!in_array($order['status'], ['paid','pending'])) Response::json(['error' => 'Solo puedes aceptar órdenes en estado pagado o pendiente.'], 400);
         $db->beginTransaction();
         try {
             $db->update('orders', ['status' => 'processing', 'vendor_accepted_at' => date('Y-m-d H:i:s')], 'id=?', [$id]);
