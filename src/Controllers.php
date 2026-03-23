@@ -1475,20 +1475,13 @@ class OrderManagementController
         $db     = DB::getInstance();
         $page   = (int)$req->input('page', 1);
         $status = $req->input('status', '');
-        // Buscar por seller_id en orders O por seller_id en order_items
-        $sql    = "SELECT DISTINCT o.*,
-                    u.name AS buyer_name, u.email AS buyer_email, u.rut AS buyer_rut,
-                    (SELECT COUNT(*) FROM order_items WHERE order_id=o.id) AS items_count
-                   FROM orders o
-                   JOIN users u ON u.id = o.buyer_id
-                   WHERE (o.seller_id = ? OR EXISTS (
-                       SELECT 1 FROM order_items oi2
-                       WHERE oi2.order_id = o.id AND oi2.seller_id = ?
-                   ))";
-        $bindings = [Auth::id(), Auth::id()];
-        if ($status) { $sql .= " AND o.status = ?"; $bindings[] = $status; }
-        $sql .= " ORDER BY o.created_at DESC";
-        $result = $db->paginate($sql, $bindings, $page);
+        $uid = Auth::id();
+        $where = "(o.seller_id = ? OR EXISTS (SELECT 1 FROM order_items oi2 WHERE oi2.order_id = o.id AND oi2.seller_id = ?))";
+        $bindings = [$uid, $uid];
+        if ($status) { $where .= " AND o.status = ?"; $bindings[] = $status; }
+        $total = (int)($db->fetch("SELECT COUNT(DISTINCT o.id) AS c FROM orders o WHERE {$where}", $bindings)["c"] ?? 0);
+        $rows = $db->fetchAll("SELECT DISTINCT o.*, u.name AS buyer_name, u.email AS buyer_email, u.rut AS buyer_rut, (SELECT COUNT(*) FROM order_items WHERE order_id=o.id) AS items_count FROM orders o JOIN users u ON u.id = o.buyer_id WHERE {$where} ORDER BY o.created_at DESC LIMIT 20", $bindings);
+        $result = ["data"=>$rows,"total"=>$total,"per_page"=>20,"current_page"=>$page,"last_page"=>(int)ceil($total/20)];
         foreach ($result['data'] as &$order) {
             $fin = $this->calcFinancials((float)$order['total']);
             $order['financials'] = $fin;

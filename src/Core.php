@@ -216,7 +216,11 @@ class Request
     public function param(string $key): ?string         { return $this->routeParams[$key] ?? null; }
     public function bearerToken(): ?string
     {
-        $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+        // PHP built-in server y Apache mod_rewrite workarounds
+        $auth = $_SERVER['HTTP_AUTHORIZATION']
+             ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
+             ?? (function_exists('getallheaders') ? (getallheaders()['Authorization'] ?? '') : '')
+             ?? '';
         return str_starts_with($auth, 'Bearer ') ? substr($auth, 7) : null;
     }
 
@@ -326,6 +330,8 @@ class AuthMiddleware implements MiddlewareInterface
     public function handle(Request $request, callable $next): void
     {
         $token = $request->bearerToken() ?? ($_COOKIE['ms_token'] ?? null);
+        file_put_contents('/tmp/ms_debug.txt', date('H:i:s')." token=".($token??'NULL')." bearer=".($request->bearerToken()??'NULL')." cookie=".($_COOKIE['ms_token']??'NULL')."\n", FILE_APPEND);
+
         if (!$token || !Auth::getUserByToken($token)) {
             $request->isJson()
                 ? Response::json(['error' => 'Unauthorized'], 401)
