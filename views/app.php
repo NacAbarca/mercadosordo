@@ -2763,7 +2763,7 @@
             <div class="text-muted small">{{n.body}}</div>
             <div class="text-muted" style="font-size:.72rem">{{formatDate(n.created_at)}}</div>
           </div>
-          <div class="rounded-circle bg-primary flex-shrink-0" style="width:8px;height:8px;margin-top:6px" v-if="!n.read_at"></div>
+          <span style="font-size:1.1rem;line-height:1" v-if="!n.read_at">👋🏻</span>
         </div>
       </div>
     </template>
