@@ -831,6 +831,54 @@ trait ImageUploadTrait
         ];
         return $mimeMap[$mime] ?? null;
     }
+
+    /**
+     * Comprime y redimensiona imagen con GD
+     * Productos: máx 1200x1200px, calidad 82% JPEG — ahorra ~70% espacio
+     * Avatares:  máx 400x400px,   calidad 85% JPEG
+     */
+    private function compressImage(string $tmpPath, string $mimeType, int $maxDim = 1200, int $quality = 82): string
+    {
+        if (!function_exists('imagecreatefromjpeg') || empty($tmpPath) || !file_exists($tmpPath)) {
+            return $tmpPath;
+        }
+        $src = match($mimeType) {
+            'image/png'  => @imagecreatefrompng($tmpPath),
+            'image/webp' => @imagecreatefromwebp($tmpPath),
+            default      => @imagecreatefromjpeg($tmpPath),
+        };
+        if (!$src) return $tmpPath;
+
+        $origW = imagesx($src);
+        $origH = imagesy($src);
+
+        // Calcular nuevas dimensiones manteniendo proporción
+        if ($origW > $origH) {
+            $newW = min($origW, $maxDim);
+            $newH = (int)round($origH * $newW / $origW);
+        } else {
+            $newH = min($origH, $maxDim);
+            $newW = (int)round($origW * $newH / $origH);
+        }
+
+        $dst = imagecreatetruecolor($newW, $newH);
+        // Fondo blanco para PNG con transparencia
+        $white = imagecolorallocate($dst, 255, 255, 255);
+        imagefill($dst, 0, 0, $white);
+        imagecopyresampled($dst, $src, 0, 0, 0, 0, $newW, $newH, $origW, $origH);
+
+        $outPath = $tmpPath . '_c.jpg';
+        imagejpeg($dst, $outPath, $quality);
+        imagedestroy($src);
+        imagedestroy($dst);
+
+        // Usar comprimida solo si es más pequeña
+        if (file_exists($outPath) && filesize($outPath) < filesize($tmpPath)) {
+            return $outPath;
+        }
+        @unlink($outPath);
+        return $tmpPath;
+    }
 }
 
 // ============================================================
@@ -954,8 +1002,12 @@ class ProfileController
         $allowed = ['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp'];
 
         $ext      = $allowed[$mimeType];
-        $filename = 'avatars/avatar_' . Auth::id() . '_' . time() . '.' . $ext;
-        $current  = $db->fetch("SELECT avatar FROM users WHERE id=?", [Auth::id()]);
+        // Comprimir avatar: máx 400x400, calidad 85%
+        $processedPath = $this->compressImage($file['tmp_name'], $mimeType, 400, 85);
+        $mimeType      = 'image/jpeg';
+        $ext           = 'jpg';
+        $filename      = 'avatars/avatar_' . Auth::id() . '_' . time() . '.' . $ext;
+        $current       = $db->fetch("SELECT avatar FROM users WHERE id=?", [Auth::id()]);
 
         if (\MercadoSordo\Core\R2Uploader::isEnabled()) {
             try {
@@ -964,7 +1016,7 @@ class ProfileController
                 if (!empty($current['avatar']) && str_contains($current['avatar'], 'r2.dev')) {
                     $r2->delete(\MercadoSordo\Core\R2Uploader::filenameFromUrl($current['avatar']));
                 }
-                $avatarUrl = $r2->upload($file['tmp_name'], $filename, $mimeType);
+                $avatarUrl = $r2->upload($processedPath, $filename, $mimeType);
             } catch (\Exception $e) {
                 Response::json(['error' => 'Error al subir imagen: ' . $e->getMessage()], 500);
             }
@@ -1143,20 +1195,21 @@ class ProductImageController
         if (!$mimeType) {
             Response::json(['error' => 'Formato no permitido. Solo JPG, PNG o WebP.'], 422);
         }
-        $allowed = ['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp'];
-        $ext      = $allowed[$mimeType];
-        $filename = 'products/prod_' . $productId . '_' . uniqid() . '.' . $ext;
+        // Comprimir: máx 1200x1200px, calidad 82% JPEG — ahorra ~70% espacio
+        $processedPath = $this->compressImage($file['tmp_name'], $mimeType, 1200, 82);
+        $mimeType      = 'image/jpeg';
+        $filename      = 'products/prod_' . $productId . '_' . uniqid() . '.jpg';
 
         if (\MercadoSordo\Core\R2Uploader::isEnabled()) {
             try {
                 $r2  = new \MercadoSordo\Core\R2Uploader();
-                $url = $r2->upload($file['tmp_name'], $filename, $mimeType);
+                $url = $r2->upload($processedPath, $filename, $mimeType);
             } catch (\Exception $e) {
                 Response::json(['error' => 'Error al subir imagen: ' . $e->getMessage()], 500);
             }
         } else {
             $dest = $this->uploadDir() . DIRECTORY_SEPARATOR . basename($filename);
-            if (!move_uploaded_file($file['tmp_name'], $dest)) {
+            if (!move_uploaded_file($processedPath, $dest)) {
                 Response::json(['error' => 'Error al guardar la imagen.'], 500);
             }
             $url = '/uploads/products/' . basename($filename);
