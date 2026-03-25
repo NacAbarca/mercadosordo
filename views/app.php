@@ -266,6 +266,25 @@
       background: var(--ms-card); border-radius: var(--ms-radius);
       padding: 24px; box-shadow: var(--ms-shadow);
     }
+    /* Precio tachado en detalle producto — rojo tachado */
+    .detail-compare-price {
+      font-size: 1rem;
+      color: #e53935;
+      text-decoration: line-through;
+      font-weight: 500;
+    }
+    /* Precio actual en detalle producto — grande y bold */
+    .detail-price {
+      font-family: 'Sora', sans-serif;
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--ms-blue);
+      margin: 0;
+      line-height: 1.1;
+    }
+    @media (max-width: 576px) {
+      .detail-price { font-size: 1.6rem; }
+    }
     .btn-add-cart {
       background: var(--ms-blue); color: white; border: none;
       border-radius: 6px; padding: 14px; font-weight: 700; font-size: 1rem;
@@ -2162,9 +2181,14 @@
           <span class="text-muted small">({{ selectedProduct.rating_count }} reseñas)</span>
         </div>
         <div class="buy-box">
-          <div v-if="selectedProduct.compare_price" class="compare-price mb-1">{{ formatCLP(selectedProduct.compare_price) }}</div>
-          <div class="price mb-1">{{ formatCLP(selectedProduct.price) }}</div>
-          <div v-if="selectedProduct.compare_price" class="discount-badge d-inline-block mb-2">
+          <!-- Precio tachado — rojo pequeño -->
+          <div v-if="selectedProduct.compare_price" class="detail-compare-price mb-1">
+            {{ formatCLP(selectedProduct.compare_price) }}
+          </div>
+          <!-- Precio actual — grande azul -->
+          <h2 class="detail-price mb-2">{{ formatCLP(selectedProduct.price) }}</h2>
+          <!-- Badge descuento -->
+          <div v-if="selectedProduct.compare_price" class="discount-badge d-inline-block mb-3">
             {{ Math.round((1 - selectedProduct.price/selectedProduct.compare_price)*100) }}% OFF
           </div>
           <!-- Descripción breve -->
@@ -3531,11 +3555,16 @@ const app = createApp({
             fd.append('image', img.file, img.file.name || `image_${i}.jpg`);
             fd.append('sort_order', productImages.value.indexOf(img));
             fd.append('is_primary', img.is_primary ? '1' : '0');
-            const res  = await fetch(`/api/products/${productId}/images`, {
+            // Timeout 30s para conexiones móviles lentas
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 30000);
+            const res = await fetch(`/api/products/${productId}/images`, {
               method: 'POST',
               headers: { 'Authorization': `Bearer ${token}` },
-              body: fd
+              body: fd,
+              signal: controller.signal
             });
+            clearTimeout(timeout);
             const data = await res.json();
             if (!res.ok) throw data;
             img.id      = data.id;
@@ -3551,8 +3580,13 @@ const app = createApp({
 
         if (lastError) {
           img.error = true;
-          const msg = lastError?.error || lastError?.message || 'Error de conexión';
-          imgErrors.value.push(`Error al subir imagen ${i + 1}: ${msg}`);
+          let msg = lastError?.error || lastError?.message || 'Error de conexión';
+          if (msg === 'Failed to fetch' || msg.includes('fetch')) {
+            msg = 'Sin conexión. Verifica tu WiFi o datos móviles e intenta de nuevo.';
+          } else if (msg.includes('abort') || lastError?.name === 'AbortError') {
+            msg = 'Tiempo agotado. Foto muy grande o conexión lenta. Intenta con otra foto.';
+          }
+          imgErrors.value.push(`Error imagen ${i + 1}: ${msg}`);
         }
         img.uploading = false;
       }
