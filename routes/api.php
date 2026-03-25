@@ -87,27 +87,28 @@ $router->group(['prefix' => '/api'], function (Router $r) {
         $r->delete('/profile/addresses/{id}',        'MercadoSordo\Controllers\ProfileController@deleteAddress');
         $r->post('/profile/avatar',                  'MercadoSordo\Controllers\ProfileController@uploadAvatar');
         $r->delete('/profile/avatar',                'MercadoSordo\Controllers\ProfileController@deleteAvatar');
-        // ── Gestión de órdenes — vendedor ─────────────────────────────────
-        $r->get('/vendor/orders',                    'MercadoSordo\Controllers\OrderManagementController@vendorOrders');
-        $r->get('/vendor/orders/{id}',               'MercadoSordo\Controllers\OrderManagementController@vendorOrderDetail');
-        $r->post('/vendor/orders/{id}/accept',       'MercadoSordo\Controllers\OrderManagementController@vendorAccept');
-        $r->post('/vendor/orders/{id}/dispatch',     'MercadoSordo\Controllers\OrderManagementController@vendorDispatch');
-        $r->post('/vendor/orders/{id}/cancel',       'MercadoSordo\Controllers\OrderManagementController@cancelOrder');
-
-        // ── Protocolo comprador ────────────────────────────────────────────
-        $r->post('/orders/{id}/confirm',             'MercadoSordo\Controllers\OrderManagementController@buyerConfirm');
-        $r->post('/orders/{id}/cancel',              'MercadoSordo\Controllers\OrderManagementController@cancelOrder');
-        $r->post('/orders/{id}/dispute',             'MercadoSordo\Controllers\OrderManagementController@openDispute');
-
-        // ── Notificaciones ─────────────────────────────────────────────────
-        $r->get('/notifications',                    'MercadoSordo\Controllers\OrderManagementController@getNotifications');
-        $r->patch('/notifications/{id}/read',        'MercadoSordo\Controllers\OrderManagementController@markNotificationRead');
-        $r->post('/notifications/read-all',          'MercadoSordo\Controllers\OrderManagementController@markAllRead');
-
-        // ── Chat por orden ──────────────────────────────────────────────────
-        $r->get('/orders/{id}/messages',             'MercadoSordo\Controllers\OrderManagementController@getMessages');
-        $r->post('/orders/{id}/messages',            'MercadoSordo\Controllers\OrderManagementController@sendMessage');
     });
+
+    // ── Gestión de órdenes — vendedor ───────────────────────────────────────
+    $r->get('/vendor/orders',                    'MercadoSordo\Controllers\OrderManagementController@vendorOrders');
+    $r->get('/vendor/orders/{id}',               'MercadoSordo\Controllers\OrderManagementController@vendorOrderDetail');
+    $r->post('/vendor/orders/{id}/accept',       'MercadoSordo\Controllers\OrderManagementController@vendorAccept');
+    $r->post('/vendor/orders/{id}/dispatch',     'MercadoSordo\Controllers\OrderManagementController@vendorDispatch');
+    $r->post('/vendor/orders/{id}/cancel',       'MercadoSordo\Controllers\OrderManagementController@cancelOrder');
+
+    // ── Protocolo comprador ────────────────────────────────────────────────
+    $r->post('/orders/{id}/confirm',             'MercadoSordo\Controllers\OrderManagementController@buyerConfirm');
+    $r->post('/orders/{id}/cancel',              'MercadoSordo\Controllers\OrderManagementController@cancelOrder');
+    $r->post('/orders/{id}/dispute',             'MercadoSordo\Controllers\OrderManagementController@openDispute');
+
+    // ── Notificaciones ────────────────────────────────────────────────────
+    $r->get('/notifications',                    'MercadoSordo\Controllers\OrderManagementController@getNotifications');
+    $r->patch('/notifications/{id}/read',        'MercadoSordo\Controllers\OrderManagementController@markNotificationRead');
+    $r->post('/notifications/read-all',          'MercadoSordo\Controllers\OrderManagementController@markAllRead');
+
+    // ── Chat por orden ─────────────────────────────────────────────────────
+    $r->get('/orders/{id}/messages',             'MercadoSordo\Controllers\OrderManagementController@getMessages');
+    $r->post('/orders/{id}/messages',            'MercadoSordo\Controllers\OrderManagementController@sendMessage');
 
     // ── Admin ─────────────────────────────────────────────────────────────
     $r->group(['prefix' => '/admin', 'middleware' => [AuthMiddleware::class, AdminMiddleware::class]], function (Router $r) {
@@ -118,6 +119,7 @@ $router->group(['prefix' => '/api'], function (Router $r) {
         $r->get('/orders',               'MercadoSordo\Controllers\AdminController@orders');
         $r->patch('/orders/{id}/status', 'MercadoSordo\Controllers\AdminController@updateOrderStatus');
         $r->get('/audit-log',            'MercadoSordo\Controllers\AdminController@auditLog');
+        $r->get('/daily-report',          'MercadoSordo\Controllers\AdminController@dailyReport');
     });
 });
 

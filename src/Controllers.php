@@ -490,6 +490,15 @@ class OrderController
             $db->insert('order_tracking', ['order_id' => $orderId, 'status' => 'pending', 'description' => 'Orden creada, esperando pago.']);
             $db->delete('cart_items', 'cart_id=?', [$cart['id']]);
             $db->commit();
+            // Email pedido creado → comprador
+            if (\MercadoSordo\Core\Mailer::isEnabled()) {
+                try {
+                    $buyerU   = $db->fetch("SELECT name, email FROM users WHERE id=?", [$buyerId]);
+                    $orderRow = $db->fetch("SELECT * FROM orders WHERE id=?", [$orderId]);
+                    $itmRows  = $db->fetchAll("SELECT * FROM order_items WHERE order_id=?", [$orderId]);
+                    (new \MercadoSordo\Core\Mailer())->send($buyerU['email'], $buyerU['name'], '✅ Pedido creado — ' . $orderNumber, \MercadoSordo\Core\Mailer::orderCreated($orderRow, $itmRows));
+                } catch (\Throwable $me) { error_log('[Mail] checkout: ' . $me->getMessage()); }
+            }
             Response::json(['order_id' => $orderId, 'order_number' => $orderNumber, 'total' => $subtotal], 201);
         } catch (\Throwable $e) {
             $db->rollback();
@@ -707,6 +716,46 @@ class AdminController
     public function categories(Request $req): void
     {
         Response::json(DB::getInstance()->fetchAll("SELECT * FROM categories ORDER BY sort_order, name"));
+    }
+
+    public function dailyReport(Request $req): void
+    {
+        // Solo accesible con clave secreta (para cron job) o admin autenticado
+        $secret = $req->input('secret', '');
+        $envSecret = getenv('REPORT_SECRET') ?: '';
+        if ($envSecret && $secret !== $envSecret && !Auth::is('admin')) {
+            Response::json(['error' => 'Unauthorized'], 401);
+        }
+
+        $db   = DB::getInstance();
+        $today = date('Y-m-d');
+
+        $stats = [
+            'orders_today'    => (int)$db->fetch("SELECT COUNT(*) AS c FROM orders WHERE DATE(created_at)=?", [$today])['c'],
+            'revenue_today'   => (float)$db->fetch("SELECT IFNULL(SUM(total),0) AS r FROM orders WHERE DATE(created_at)=? AND status NOT IN ('cancelled','refunded')", [$today])['r'],
+            'commission_today'=> 0,
+            'new_users'       => (int)$db->fetch("SELECT COUNT(*) AS c FROM users WHERE DATE(created_at)=?", [$today])['c'],
+        ];
+        $stats['commission_today'] = round($stats['revenue_today'] * 0.05, 2);
+
+        $recentOrders = $db->fetchAll(
+            "SELECT o.order_number, u.name AS buyer_name, o.total, o.status
+             FROM orders o JOIN users u ON u.id=o.buyer_id
+             ORDER BY o.created_at DESC LIMIT 10"
+        );
+
+        // Enviar email al admin
+        if (\MercadoSordo\Core\Mailer::isEnabled()) {
+            try {
+                $admin = $db->fetch("SELECT name, email FROM users WHERE role='admin' LIMIT 1");
+                if ($admin) {
+                    $html = \MercadoSordo\Core\Mailer::adminDailyReport($stats, $recentOrders);
+                    (new \MercadoSordo\Core\Mailer())->send($admin['email'], $admin['name'], '📊 Reporte diario MercadoSordo — ' . date('d/m/Y'), $html);
+                }
+            } catch (\Throwable $e) { error_log('[Mail] report: ' . $e->getMessage()); }
+        }
+
+        Response::json(['message' => 'Reporte enviado.', 'stats' => $stats]);
     }
 
     public function auditLog(Request $req): void
@@ -1626,6 +1675,17 @@ class OrderManagementController
             $db->insert('order_confirmations', ['order_id' => $id, 'step' => 'vendor_accept', 'confirmed_by' => Auth::id(), 'notes' => $req->input('notes')]);
             $this->notify($db, (int)$order['buyer_id'], 'order_accepted', '✅ Vendedor aceptó tu orden', 'Tu orden ' . $order['order_number'] . ' está siendo preparada.', 'bi-bag-check', 'success', 'order', $id);
             $db->commit();
+            // Emails orden aceptada
+            if (\MercadoSordo\Core\Mailer::isEnabled()) {
+                try {
+                    $mailer  = new \MercadoSordo\Core\Mailer();
+                    $buyerU  = $db->fetch("SELECT name, email FROM users WHERE id=?", [(int)$order['buyer_id']]);
+                    $vendorU = $db->fetch("SELECT u.name, u.email, COALESCE(vba.tax_rate,0) AS tax_rate FROM users u LEFT JOIN vendor_bank_accounts vba ON vba.vendor_id=u.id WHERE u.id=?", [Auth::id()]);
+                    $fin2    = $this->calcFinancials((float)$order['total'], (float)$vendorU['tax_rate']);
+                    $mailer->send($buyerU['email'], $buyerU['name'], '📦 Tu pedido fue aceptado', \MercadoSordo\Core\Mailer::orderAccepted($order));
+                    $mailer->send($vendorU['email'], $vendorU['name'], '💰 Pago recibido — ' . $order['order_number'], \MercadoSordo\Core\Mailer::paymentReceived($order, $fin2));
+                } catch (\Throwable $me) { error_log('[Mail] accept: ' . $me->getMessage()); }
+            }
             Response::json(['message' => 'Orden aceptada. El comprador fue notificado.']);
         } catch (\Throwable $e) { $db->rollback(); Response::json(['error' => 'Error al aceptar orden.'], 500); }
     }
@@ -1654,6 +1714,14 @@ class OrderManagementController
             $db->insert('order_confirmations', ['order_id' => $id, 'step' => 'vendor_dispatch', 'confirmed_by' => Auth::id(), 'metadata' => json_encode(['tracking_number' => $tracking, 'carrier' => $carrier])]);
             $this->notify($db, (int)$order['buyer_id'], 'order_dispatched', '🚚 Tu pedido fue despachado', "Orden {$order['order_number']} en camino. Carrier: {$carrier}" . ($tracking ? " · Tracking: {$tracking}" : ''), 'bi-truck', 'info', 'order', $id);
             $db->commit();
+            // Email despachada → comprador
+            if (\MercadoSordo\Core\Mailer::isEnabled()) {
+                try {
+                    $orderUp = $db->fetch("SELECT * FROM orders WHERE id=?", [$id]);
+                    $buyerU  = $db->fetch("SELECT name, email FROM users WHERE id=?", [(int)$order['buyer_id']]);
+                    (new \MercadoSordo\Core\Mailer())->send($buyerU['email'], $buyerU['name'], '🚚 Tu pedido está en camino', \MercadoSordo\Core\Mailer::orderDispatched($orderUp));
+                } catch (\Throwable $me) { error_log('[Mail] dispatch: ' . $me->getMessage()); }
+            }
             Response::json(['message' => 'Despacho confirmado. Comprador notificado.', 'auto_complete_at' => $autoComplete]);
         } catch (\Throwable $e) { $db->rollback(); Response::json(['error' => 'Error al confirmar despacho.'], 500); }
     }
@@ -1674,6 +1742,15 @@ class OrderManagementController
             $fin = $this->calcFinancials((float)$order['total']);
             $this->notify($db, (int)$order['seller_id'], 'order_completed', '💰 Fondos liberados', "Orden {$order['order_number']} completada. Recibirás \$" . number_format($fin['vendor_net'], 0, ',', '.') . " CLP.", 'bi-cash-coin', 'success', 'order', $id);
             $db->commit();
+            // Email completada → vendedor
+            if (\MercadoSordo\Core\Mailer::isEnabled()) {
+                try {
+                    $sId     = $order['seller_id'] ?? $db->fetch("SELECT seller_id FROM order_items WHERE order_id=? LIMIT 1", [$id])['seller_id'];
+                    $vendorU = $db->fetch("SELECT u.name, u.email, COALESCE(vba.tax_rate,0) AS tax_rate FROM users u LEFT JOIN vendor_bank_accounts vba ON vba.vendor_id=u.id WHERE u.id=?", [(int)$sId]);
+                    $fin2    = $this->calcFinancials((float)$order['total'], (float)$vendorU['tax_rate']);
+                    (new \MercadoSordo\Core\Mailer())->send($vendorU['email'], $vendorU['name'], '🎉 Venta completada', \MercadoSordo\Core\Mailer::orderCompleted($order, $fin2));
+                } catch (\Throwable $me) { error_log('[Mail] confirm: ' . $me->getMessage()); }
+            }
             Response::json(['message' => 'Recepción confirmada. Fondos liberados al vendedor.']);
         } catch (\Throwable $e) { $db->rollback(); Response::json(['error' => 'Error al confirmar.'], 500); }
     }
@@ -1798,6 +1875,14 @@ class OrderManagementController
         $sender   = $db->fetch("SELECT name FROM users WHERE id=?", [Auth::id()]);
         $this->notify($db, (int)$receiver, 'new_message', '💬 Nuevo mensaje', $sender['name'] . ': ' . substr(trim($data['message']), 0, 80), 'bi-chat-dots', 'info', 'order', $id);
         $msg = $db->fetch("SELECT om.*, u.name AS sender_name, u.avatar AS sender_avatar FROM order_messages om JOIN users u ON u.id=om.sender_id WHERE om.id=?", [$msgId]);
+        // Email nuevo mensaje → destinatario
+        if (\MercadoSordo\Core\Mailer::isEnabled()) {
+            try {
+                $recipientU  = $db->fetch("SELECT name, email FROM users WHERE id=?", [(int)$receiver]);
+                $senderU     = $db->fetch("SELECT name FROM users WHERE id=?", [Auth::id()]);
+                (new \MercadoSordo\Core\Mailer())->send($recipientU['email'], $recipientU['name'], '💬 Nuevo mensaje de ' . $senderU['name'], \MercadoSordo\Core\Mailer::newChatMessage($order, $senderU['name'], trim($data['message'])));
+            } catch (\Throwable $me) { error_log('[Mail] chat: ' . $me->getMessage()); }
+        }
         Response::json(['message' => $msg], 201);
     }
 }
