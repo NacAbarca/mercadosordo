@@ -330,8 +330,6 @@ class AuthMiddleware implements MiddlewareInterface
     public function handle(Request $request, callable $next): void
     {
         $token = $request->bearerToken() ?? ($_COOKIE['ms_token'] ?? null);
-        file_put_contents('/tmp/ms_debug.txt', date('H:i:s')." token=".($token??'NULL')." bearer=".($request->bearerToken()??'NULL')." cookie=".($_COOKIE['ms_token']??'NULL')."\n", FILE_APPEND);
-
         if (!$token || !Auth::getUserByToken($token)) {
             $request->isJson()
                 ? Response::json(['error' => 'Unauthorized'], 401)

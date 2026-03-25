@@ -52,8 +52,26 @@
       font-size: 1.5rem;
       color: #ffffff;
       text-decoration: none;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
     .navbar-ms .brand span { color: var(--ms-yellow); }
+    @media (max-width: 576px) {
+      .navbar-ms .brand {
+        font-size: 1.15rem;
+      }
+      .navbar-ms .brand .brand-full { display: none; }
+      .navbar-ms .brand .brand-short { display: inline; }
+      .navbar-actions a span, .navbar-actions button span {
+        font-size: .72rem;
+      }
+      .navbar-actions i { font-size: 1.1rem; }
+      .search-bar input { font-size: .85rem; }
+    }
+    @media (min-width: 577px) {
+      .navbar-ms .brand .brand-short { display: none; }
+      .navbar-ms .brand .brand-full { display: inline; }
+    }
 
     .search-bar { flex: 1; max-width: 600px; position: relative; }
     .search-bar input {
@@ -406,7 +424,8 @@
   <nav class="navbar-ms" v-if="!isAdminRoute">
     <div class="container-fluid px-3 d-flex align-items-center gap-3">
       <a href="#" class="brand" @click.prevent="navigate('home')">
-        Mercado<span>Sordo</span>
+        <span class="brand-full">Mercado<span>Sordo</span></span>
+        <span class="brand-short">MS<span style="color:var(--ms-yellow)">·</span></span>
       </a>
       <div class="search-bar d-none d-md-flex">
         <input type="text" :placeholder="'Buscar en ' + (activeCategory || 'todo MercadoSordo')"
@@ -1023,7 +1042,7 @@
                 <small class="text-muted" v-if="productForm.price > 0">{{ formatCLP(productForm.price) }}</small>
               </div>
 
-              <!-- Precio comparación -->
+              <!-- Precio tachado con indicador % -->
               <div class="col-md-4">
                 <label class="form-label fw-bold">Precio tachado <span class="text-muted fw-normal small">(opcional)</span></label>
                 <div class="input-group">
@@ -1031,9 +1050,18 @@
                   <input type="number" class="form-control" v-model.number="productForm.compare_price"
                          placeholder="Precio antes del descuento" min="0">
                 </div>
-                <small class="text-success fw-bold" v-if="productForm.compare_price > productForm.price && productForm.price > 0">
-                  {{ Math.round((1 - productForm.price / productForm.compare_price) * 100) }}% de descuento
-                </small>
+                <!-- Precio mayor = sube = rojo (precio subió) -->
+                <div v-if="productForm.compare_price > 0 && productForm.price > 0">
+                  <small v-if="productForm.compare_price > productForm.price" class="fw-bold text-success">
+                    <i class="bi bi-tag-fill me-1"></i>
+                    {{ Math.round((1 - productForm.price / productForm.compare_price) * 100) }}% de descuento
+                  </small>
+                  <small v-else-if="productForm.compare_price < productForm.price" class="fw-bold text-danger">
+                    <i class="bi bi-graph-up-arrow me-1"></i>
+                    {{ Math.round((productForm.price / productForm.compare_price - 1) * 100) }}% más caro que antes
+                  </small>
+                  <small v-else class="text-muted">Sin cambio de precio</small>
+                </div>
               </div>
 
               <!-- Stock -->
@@ -1153,7 +1181,18 @@
                   <div class="position-relative rounded overflow-hidden border"
                        :class="idx===0 ? 'border-primary border-2' : 'border-light'"
                        style="aspect-ratio:1;background:#f8f8f8">
-                    <img :src="img.preview || img.url" class="w-100 h-100" style="object-fit:cover">
+                    <img v-if="img.preview || img.url"
+                         :src="img.preview || img.url"
+                         class="w-100 h-100"
+                         style="object-fit:cover"
+                         @error="img.loadError=true"
+                         v-show="!img.loadError">
+                    <div v-if="!img.preview && (!img.url || img.loadError)"
+                         class="w-100 h-100 d-flex flex-column align-items-center justify-content-center text-muted"
+                         style="font-size:.65rem;gap:2px">
+                      <i class="bi bi-image" style="font-size:1.2rem"></i>
+                      <span>Sin imagen</span>
+                    </div>
                     <!-- Badge principal -->
                     <span v-if="idx===0"
                           class="position-absolute top-0 start-0 badge bg-primary m-1"
@@ -1963,6 +2002,36 @@
               Sin métodos de pago activos. Los compradores no podrán completar el pago de tus productos.
             </div>
 
+            <!-- Régimen tributario -->
+            <div class="card border-0 rounded-3 p-3 mb-3" style="background:rgba(27,79,138,0.06)">
+              <div class="fw-bold mb-2"><i class="bi bi-percent me-2 text-primary"></i>Régimen tributario (IVA)</div>
+              <div class="row g-2 align-items-end">
+                <div class="col-md-7">
+                  <label class="form-label small fw-bold">Tasa IVA que aplicas a tus ventas</label>
+                  <select class="form-select" v-model.number="paymentMethods.value.tax_rate">
+                    <option :value="0">0% — Exento (Persona natural sin inicio de actividades)</option>
+                    <option :value="10">10% — Tasa reducida</option>
+                    <option :value="19">19% — Estándar (Empresa / Persona jurídica)</option>
+                    <option :value="-1">Otro % — Personalizado</option>
+                  </select>
+                  <div class="mt-2" v-if="paymentMethods.value.tax_rate === -1">
+                    <div class="input-group" style="max-width:200px">
+                      <input type="number" class="form-control" v-model.number="paymentMethods.value.tax_rate_custom"
+                             min="0" max="100" step="0.1" placeholder="0.0">
+                      <span class="input-group-text">%</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-5">
+                  <div class="p-2 rounded border" style="font-size:.82rem">
+                    <div class="text-muted mb-1">Comisión plataforma</div>
+                    <div class="fw-bold text-primary fs-5">5% fijo</div>
+                    <div class="text-muted" style="font-size:.72rem">Aplica a todos los proveedores por igual</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Botón guardar -->
             <div class="alert alert-success small" v-if="paymentMethodsSaved">
               <i class="bi bi-check-circle me-1"></i>Métodos de pago guardados correctamente.
@@ -2115,14 +2184,44 @@
           <button class="btn-add-cart" @click="addToCart(selectedProduct, detailQty)" :disabled="selectedProduct.stock === 0">
             <i class="bi bi-cart-plus me-2"></i>Agregar al carrito
           </button>
-          <button class="btn-buy-now">Comprar ahora</button>
+          <button class="btn-buy-now" @click="buyNow(selectedProduct, detailQty)" :disabled="selectedProduct.stock === 0">Comprar ahora</button>
           <div class="mt-3 pt-3 border-top">
             <small class="text-muted d-flex align-items-center gap-2 mb-1">
               <i class="bi bi-person-circle"></i>Vendido por <strong>{{ selectedProduct.seller_name }}</strong>
             </small>
-            <small class="text-muted d-flex align-items-center gap-2">
+            <small class="text-muted d-flex align-items-center gap-2 mb-3">
               <i class="bi bi-shield-check text-success"></i>Compra protegida
             </small>
+            <!-- Compartir en RRSS -->
+            <div class="pt-2">
+              <small class="text-muted fw-bold d-block mb-2"><i class="bi bi-share me-1"></i>Compartir</small>
+              <div class="d-flex gap-2 flex-wrap">
+                <a :href="'https://wa.me/?text=' + encodeURIComponent(selectedProduct.title + ' - ' + formatCLP(selectedProduct.price) + ' - ' + shareUrl)"
+                   target="_blank" class="btn btn-sm d-flex align-items-center gap-1 fw-bold"
+                   style="background:#25D366;color:white;border:none;border-radius:8px;font-size:.8rem">
+                  <i class="bi bi-whatsapp"></i> WhatsApp
+                </a>
+                <a :href="'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl)"
+                   target="_blank" class="btn btn-sm d-flex align-items-center gap-1 fw-bold"
+                   style="background:#1877F2;color:white;border:none;border-radius:8px;font-size:.8rem">
+                  <i class="bi bi-facebook"></i> Facebook
+                </a>
+                <a :href="'https://t.me/share/url?url=' + encodeURIComponent(shareUrl) + '&text=' + encodeURIComponent(selectedProduct.title)"
+                   target="_blank" class="btn btn-sm d-flex align-items-center gap-1 fw-bold"
+                   style="background:#229ED9;color:white;border:none;border-radius:8px;font-size:.8rem">
+                  <i class="bi bi-telegram"></i> Telegram
+                </a>
+                <a :href="'https://www.tiktok.com/share?url=' + encodeURIComponent(shareUrl)"
+                   target="_blank" class="btn btn-sm d-flex align-items-center gap-1 fw-bold"
+                   style="background:#000;color:white;border:none;border-radius:8px;font-size:.8rem">
+                  <i class="bi bi-tiktok"></i> TikTok
+                </a>
+                <button @click="copyShareLink" class="btn btn-sm d-flex align-items-center gap-1 fw-bold"
+                        style="background:var(--ms-blue);color:white;border:none;border-radius:8px;font-size:.8rem">
+                  <i class="bi bi-link-45deg"></i> Copiar link
+                </button>
+              </div>
+            </div>
           </div>
         </div>
         <!-- Description -->
@@ -3791,6 +3890,8 @@ const app = createApp({
             wallet:      { enabled: !!a.wallet_enabled,  provider: a.wallet_provider || '', account: a.wallet_account || '', instructions: a.wallet_instructions || '' },
             transfer:    { enabled: !!a.is_active,       bank: a.bank_name || '', account_type: a.account_type || 'cuenta_corriente', account_number: a.account_number || '', account_name: a.account_name || '' },
             custom:      { enabled: !!a.custom_enabled,  text: a.custom_text || '' },
+            tax_rate:    parseFloat(a.tax_rate ?? 0),
+            tax_rate_custom: parseFloat(a.tax_rate ?? 0),
           };
         }
       } catch {}
@@ -4328,6 +4429,17 @@ const app = createApp({
       toast('Función de disputa próximamente.', 'warning');
     }
 
+    async function buyNow(product, qty = 1) {
+      if (auth.value.user?.role === 'admin') { toast('Los administradores no pueden realizar compras.', 'error'); return; }
+      if (auth.value.user?.id && product.seller_id === auth.value.user.id) { toast('No puedes comprar tus propios productos.', 'error'); return; }
+      if (!checkRut()) return;
+      try {
+        await api('POST', '/cart/items', { product_id: product.id, quantity: qty });
+        await loadCart();
+        navigate('checkout');
+      } catch (e) { toast(e.error || 'Error al procesar.', 'error'); }
+    }
+
     async function confirmOrderReceived(orderId) {
       try {
         await api('POST', `/orders/${orderId}/confirm`);
@@ -4368,6 +4480,26 @@ const app = createApp({
 
     function formatCLP(v) {
       return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(v || 0);
+    }
+
+    // URL para compartir producto
+    const shareUrl = Vue.computed(() => {
+      if (!selectedProduct.value?.slug) return window.location.href;
+      return window.location.origin + '/products/' + selectedProduct.value.slug;
+    });
+
+    async function copyShareLink() {
+      const url = shareUrl.value;
+      try {
+        await navigator.clipboard.writeText(url);
+        toast('🔗 Link copiado al portapapeles');
+      } catch {
+        const el = document.createElement('input');
+        el.value = url; document.body.appendChild(el);
+        el.select(); document.execCommand('copy');
+        document.body.removeChild(el);
+        toast('🔗 Link copiado');
+      }
     }
 
     function formatDate(d) {
@@ -4466,7 +4598,7 @@ const app = createApp({
       toast('Sesión cerrada.');
     }
 
-    // ─── Products ─────_─────────────────────────────────────
+    // ─── Products ──────────────────────────────────────────
     async function loadProducts(featured = false) {
       products.value.loading = true;
       try {
@@ -4655,7 +4787,8 @@ const app = createApp({
       removeImage, setPrimaryImage, moveImage, loadProductImages,
       confirmDeleteProduct, doDeleteProduct, getCategoryName,
       updateAdminUser, updateOrderStatus,
-      formatCLP, formatDate, statusBadge, statusLabel,
+      formatCLP, formatDate, statusBadge, statusLabel, buyNow,
+        shareUrl, copyShareLink,
       vendorOrders, vendorOrdersLoading, vendorOrderFilter, selectedVendorOrder,
       vendorOrdersBadge, orderActionLoading, dispatchForm, showCancelOrder, cancelReason,
       orderMessages, chatMessage,
