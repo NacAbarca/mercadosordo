@@ -4552,7 +4552,8 @@ const app = createApp({
     // URL para compartir producto
     const shareUrl = Vue.computed(() => {
       if (!selectedProduct.value?.slug) return window.location.href;
-      return window.location.origin + '/products/' + selectedProduct.value.slug;
+      const base = window.location.origin;
+      return base + '/products/' + selectedProduct.value.slug;
     });
 
     async function copyShareLink() {
@@ -4609,6 +4610,10 @@ const app = createApp({
       window.scrollTo(0, 0);
       if (view === 'home') loadProducts(true);
       if (view === 'products') loadProducts();
+      // Limpiar URL al salir del detalle de producto
+      if (view !== 'product-detail' && window.location.pathname.startsWith('/products/')) {
+        window.history.replaceState({}, '', '/');
+      }
       if (view === 'cart') loadCart();
       if (view === 'orders') { selectedOrder.value = null; loadOrders(); }
       if (view === 'my-products')    { sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus(); }
@@ -4699,6 +4704,8 @@ const app = createApp({
     async function viewProduct(p) {
       currentView.value = 'product-detail';
       window.scrollTo(0, 0);
+      // Actualizar URL para que sea compartible
+      window.history.pushState({}, '', `/products/${p.slug}`);
       try {
         selectedProduct.value = await api('GET', `/products/${p.slug}`);
         activeImage.value = selectedProduct.value.images?.[0]?.url || null;
@@ -4819,6 +4826,24 @@ const app = createApp({
     onMounted(async () => {
       await Promise.all([loadMe(), loadCategories(), loadProducts(true), loadCart()]);
       if (auth.value.user) loadUnreadCount();
+
+      // Detectar URL directa /products/{slug} — para links compartidos en RRSS
+      const path = window.location.pathname;
+      const slugMatch = path.match(/^\/products\/([^\/]+)$/);
+      if (slugMatch) {
+        const slug = slugMatch[1];
+        try {
+          const product = await api('GET', `/products/${slug}`);
+          if (product && product.id) {
+            selectedProduct.value = product;
+            activeImage.value = product.images?.[0]?.url || product.primary_image || null;
+            detailQty.value = 1;
+            currentView.value = 'product-detail';
+            // Actualizar URL sin recargar
+            window.history.replaceState({}, '', `/products/${slug}`);
+          }
+        } catch { navigate('home'); }
+      }
     });
 
     return {
