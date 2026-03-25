@@ -777,10 +777,60 @@ class AdminController
 }
 
 // ============================================================
+// ImageUploadTrait — detección MIME robusta para móviles
+// ============================================================
+trait ImageUploadTrait
+{
+    /**
+     * Detecta MIME real de imagen usando magic bytes
+     * Compatible con Android (Samsung, Pixel), iOS (HEIC→JPG), desktop
+     * Retorna 'image/jpeg' | 'image/png' | 'image/webp' | null si no es imagen
+     */
+    private function detectImageMime(string $tmpPath, string $originalName = ''): ?string
+    {
+        // 1. Leer magic bytes (primeros 12 bytes)
+        $handle = fopen($tmpPath, 'rb');
+        if (!$handle) return null;
+        $bytes = fread($handle, 12);
+        fclose($handle);
+
+        // JPEG: FF D8 FF
+        if (substr($bytes, 0, 3) === "ÿØÿ") return 'image/jpeg';
+        // PNG: 89 50 4E 47 0D 0A 1A 0A
+        if (substr($bytes, 0, 8) === "PNG
+
+") return 'image/png';
+        // WebP: RIFF????WEBP
+        if (substr($bytes, 0, 4) === 'RIFF' && substr($bytes, 8, 4) === 'WEBP') return 'image/webp';
+        // HEIC/HEIF: ftyp
+        if (substr($bytes, 4, 4) === 'ftyp') return 'image/jpeg'; // convertir a jpg
+
+        // 2. Fallback por extensión del nombre original
+        $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        $extMap = [
+            'jpg'  => 'image/jpeg', 'jpeg' => 'image/jpeg',
+            'png'  => 'image/png',  'webp' => 'image/webp',
+            'heic' => 'image/jpeg', 'heif' => 'image/jpeg',
+        ];
+        if (isset($extMap[$ext])) return $extMap[$ext];
+
+        // 3. Fallback mime_content_type
+        $mime = mime_content_type($tmpPath);
+        $mimeMap = [
+            'image/jpeg' => 'image/jpeg', 'image/jpg' => 'image/jpeg',
+            'image/png'  => 'image/png',  'image/webp' => 'image/webp',
+            'image/heic' => 'image/jpeg', 'image/heif' => 'image/jpeg',
+        ];
+        return $mimeMap[$mime] ?? null;
+    }
+}
+
+// ============================================================
 // ProfileController — /api/profile/*
 // ============================================================
 class ProfileController
 {
+    use ImageUploadTrait;
     // ── Validar RUT chileno formato xx.xxx.xxx-x ────────────
     private function validateRut(string $rut): bool
     {
@@ -877,23 +927,15 @@ class ProfileController
         }
 
         $db       = DB::getInstance();
-        $file     = $_FILES['avatar'];
-        $mimeType = mime_content_type($file['tmp_name']);
-
-        // Fallback para celulares (iOS HEIC, Android octet-stream)
-        if (!in_array($mimeType, ['image/jpeg','image/jpg','image/png','image/webp','image/heic','image/heif'])) {
-            $ext_map = ['jpg'=>'jpg','jpeg'=>'jpg','png'=>'png','webp'=>'webp','heic'=>'jpg','heif'=>'jpg'];
-            $origExt = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-            if (!isset($ext_map[$origExt])) {
-                Response::json(['error' => 'Formato no permitido. Solo JPG, PNG o WebP.'], 422);
-            }
-            $mimeType = 'image/jpeg';
-        }
-        $allowed = ['image/jpeg'=>'jpg','image/jpg'=>'jpg','image/png'=>'png','image/webp'=>'webp'];
-        if (!isset($allowed[$mimeType])) $mimeType = 'image/jpeg';
+        $file = $_FILES['avatar'];
         if ($file['size'] > 2 * 1024 * 1024) {
             Response::json(['error' => 'La imagen no puede superar 2MB.'], 422);
         }
+        $mimeType = $this->detectImageMime($file['tmp_name'], $file['name']);
+        if (!$mimeType) {
+            Response::json(['error' => 'Formato no permitido. Solo JPG, PNG o WebP.'], 422);
+        }
+        $allowed = ['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp'];
 
         $ext      = $allowed[$mimeType];
         $filename = 'avatars/avatar_' . Auth::id() . '_' . time() . '.' . $ext;
@@ -1037,6 +1079,8 @@ class ProfileController
 // ============================================================
 class ProductImageController
 {
+    use ImageUploadTrait;
+
     private function uploadDir(): string
     {
         $base = defined('BASE_PATH') ? BASE_PATH : dirname(__DIR__);
@@ -1064,28 +1108,14 @@ class ProductImageController
         if (empty($_FILES['image'])) Response::json(['error' => 'No se recibió imagen.'], 400);
 
         $file     = $_FILES['image'];
-        $allowed  = [
-            'image/jpeg' => 'jpg', 'image/jpg' => 'jpg',
-            'image/png'  => 'png', 'image/webp' => 'webp',
-            'image/heic' => 'jpg', 'image/heif' => 'jpg',
-            'application/octet-stream' => null // fallback celular
-        ];
-        $mimeType = mime_content_type($file['tmp_name']);
-        // Fallback: si MIME no reconocido, verificar por extensión
-        if (!isset($allowed[$mimeType]) || $allowed[$mimeType] === null) {
-            $ext_map = ['jpg'=>'jpg','jpeg'=>'jpg','png'=>'png','webp'=>'webp','heic'=>'jpg','heif'=>'jpg'];
-            $origExt = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-            if (isset($ext_map[$origExt])) {
-                $mimeType = 'image/jpeg'; // normalizar
-            } else {
-                Response::json(['error' => 'Formato no permitido. Solo JPG, PNG o WebP.'], 422);
-            }
-        }
         if ($file['size'] > 5 * 1024 * 1024) {
             Response::json(['error' => 'La imagen no puede superar 5MB.'], 422);
         }
-        $allowed  = ['image/jpeg'=>'jpg','image/jpg'=>'jpg','image/png'=>'png','image/webp'=>'webp'];
-        if (!isset($allowed[$mimeType])) $mimeType = 'image/jpeg';
+        $mimeType = $this->detectImageMime($file['tmp_name'], $file['name']);
+        if (!$mimeType) {
+            Response::json(['error' => 'Formato no permitido. Solo JPG, PNG o WebP.'], 422);
+        }
+        $allowed = ['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp'];
         $ext      = $allowed[$mimeType];
         $filename = 'products/prod_' . $productId . '_' . uniqid() . '.' . $ext;
 
