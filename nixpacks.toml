@@ -5,4 +5,4 @@ nixPkgs = ["php82", "php82Extensions.pdo", "php82Extensions.pdo_mysql", "php82Ex
 cmds = ["mkdir -p public/uploads/products public/uploads/avatars"]
 
 [start]
-cmd = "php -S 0.0.0.0:$PORT -t public"
+cmd = "php -S 0.0.0.0:$PORT -t public -c php.ini"
