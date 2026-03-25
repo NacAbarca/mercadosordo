@@ -1368,6 +1368,7 @@ class BankTransferController
             'wallet_instructions' => $data['wallet']['instructions'] ?? null,
             'custom_enabled'      => !empty($data['custom']['enabled']) ? 1 : 0,
             'custom_text'         => $data['custom']['text'] ?? null,
+            'tax_rate'            => isset($data['tax_rate']) ? (float)$data['tax_rate'] : 0.00,
         ];
 
         if ($existing) {
@@ -1497,9 +1498,10 @@ class OrderManagementController
     private const AUTO_COMPLETE_DAYS = 7;
 
     // ── Calcular desglose financiero ───────────────────────
-    private function calcFinancials(float $total): array
+    private function calcFinancials(float $total, ?float $taxRate = null): array
     {
-        $ivaAmount    = round($total - ($total / (1 + self::IVA_RATE)), 2);
+        $rate         = ($taxRate !== null) ? $taxRate / 100 : 0.0;
+        $ivaAmount    = $rate > 0 ? round($total - ($total / (1 + $rate)), 2) : 0.0;
         $subtotalNeto = round($total - $ivaAmount, 2);
         $commission   = round($total * self::COMMISSION_RATE, 2);
         $vendorNet    = round($total - $commission, 2);
@@ -1509,7 +1511,7 @@ class OrderManagementController
             'subtotal_neto'    => $subtotalNeto,
             'commission_amount'=> $commission,
             'vendor_net'       => $vendorNet,
-            'iva_pct'          => self::IVA_RATE * 100,
+            'iva_pct'          => $rate * 100,
             'commission_pct'   => self::COMMISSION_RATE * 100,
         ];
     }
@@ -1568,8 +1570,10 @@ class OrderManagementController
             'current_page' => $page,
             'last_page'    => (int)ceil($total / 20),
         ];
+        $vendor  = $db->fetch("SELECT tax_rate FROM vendor_bank_accounts WHERE vendor_id=?", [Auth::id()]);
+        $taxRate = (float)($vendor['tax_rate'] ?? 0);
         foreach ($result['data'] as &$order) {
-            $fin = $this->calcFinancials((float)$order['total']);
+            $fin = $this->calcFinancials((float)$order['total'], $taxRate);
             $order['financials'] = $fin;
             $order['items'] = $db->fetchAll(
                 "SELECT oi.*,
@@ -1601,7 +1605,8 @@ class OrderManagementController
         $order['tracking']      = $db->fetchAll("SELECT * FROM order_tracking WHERE order_id=? ORDER BY created_at ASC", [$id]);
         $order['confirmations'] = $db->fetchAll("SELECT oc.*, u.name AS confirmed_by_name FROM order_confirmations oc LEFT JOIN users u ON u.id=oc.confirmed_by WHERE oc.order_id=? ORDER BY oc.confirmed_at ASC", [$id]);
         $order['messages']      = $db->fetchAll("SELECT om.*, u.name AS sender_name, u.avatar AS sender_avatar FROM order_messages om JOIN users u ON u.id=om.sender_id WHERE om.order_id=? ORDER BY om.created_at ASC", [$id]);
-        $order['financials']    = $this->calcFinancials((float)$order['total']);
+        $vdAcct = $db->fetch("SELECT tax_rate FROM vendor_bank_accounts WHERE vendor_id=?", [$order['seller_id'] ?? Auth::id()]);
+        $order['financials'] = $this->calcFinancials((float)$order['total'], (float)($vdAcct['tax_rate'] ?? 0));
         $order['dispute']       = $db->fetch("SELECT * FROM order_disputes WHERE order_id=?", [$id]);
         Response::json($order);
     }
