@@ -503,7 +503,7 @@ class OrderController
             // Email pedido creado → comprador
             if (\MercadoSordo\Core\Mailer::isEnabled()) {
                 try {
-                    $buyerU   = $db->fetch("SELECT name, email FROM users WHERE id=?", [$buyerId]);
+                    $buyerU   = $db->fetch("SELECT name, email FROM users WHERE id=?", [Auth::id()]);
                     $orderRow = $db->fetch("SELECT * FROM orders WHERE id=?", [$orderId]);
                     $itmRows  = $db->fetchAll("SELECT * FROM order_items WHERE order_id=?", [$orderId]);
                     (new \MercadoSordo\Core\Mailer())->send($buyerU['email'], $buyerU['name'], '✅ Pedido creado — ' . $orderNumber, \MercadoSordo\Core\Mailer::orderCreated($orderRow, $itmRows));
