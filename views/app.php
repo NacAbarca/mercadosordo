@@ -2008,15 +2008,15 @@
               <div class="row g-2 align-items-end">
                 <div class="col-md-7">
                   <label class="form-label small fw-bold">Tasa IVA que aplicas a tus ventas</label>
-                  <select class="form-select" v-model.number="paymentMethods.value.tax_rate">
+                  <select class="form-select" v-model.number="paymentMethods.tax_rate">
                     <option :value="0">0% — Exento (Persona natural sin inicio de actividades)</option>
                     <option :value="10">10% — Tasa reducida</option>
                     <option :value="19">19% — Estándar (Empresa / Persona jurídica)</option>
                     <option :value="-1">Otro % — Personalizado</option>
                   </select>
-                  <div class="mt-2" v-if="paymentMethods.value.tax_rate === -1">
+                  <div class="mt-2" v-if="paymentMethods.tax_rate === -1">
                     <div class="input-group" style="max-width:200px">
-                      <input type="number" class="form-control" v-model.number="paymentMethods.value.tax_rate_custom"
+                      <input type="number" class="form-control" v-model.number="paymentMethods.tax_rate_custom"
                              min="0" max="100" step="0.1" placeholder="0.0">
                       <span class="input-group-text">%</span>
                     </div>
@@ -3815,13 +3815,16 @@ const app = createApp({
       wallet:      { enabled: false, provider: '', account: '', instructions: '' },
       transfer:    { enabled: false, bank: '', account_type: 'cuenta_corriente', account_number: '', account_name: '' },
       custom:      { enabled: false, text: '' },
+      tax_rate:    0,
+      tax_rate_custom: 0,
     });
 
     const activePaymentMethods = computed(() => {
       const names = { mercadopago: 'Mercado Pago', wallet: 'Billetera Digital', transfer: 'Transferencia', custom: 'Personalizado' };
-      return Object.entries(paymentMethods.value)
-        .filter(([, v]) => v.enabled)
-        .map(([k]) => names[k]);
+      const keys  = ['mercadopago', 'wallet', 'transfer', 'custom'];
+      return keys
+        .filter(k => paymentMethods.value[k]?.enabled)
+        .map(k => names[k]);
     });
 
     // Construir lista de métodos del vendedor para mostrar en checkout
@@ -3869,7 +3872,13 @@ const app = createApp({
     async function savePaymentMethods() {
       profileLoading.value = true;
       try {
-        await api('POST', '/vendor/payment-methods/save', paymentMethods.value);
+        const pmData = {
+          ...paymentMethods.value,
+          tax_rate: paymentMethods.value.tax_rate === -1
+            ? (paymentMethods.value.tax_rate_custom || 0)
+            : (paymentMethods.value.tax_rate || 0),
+        };
+        await api('POST', '/vendor/payment-methods/save', pmData);
         paymentMethodsSaved.value = true;
         setTimeout(() => paymentMethodsSaved.value = false, 3000);
         toast('Métodos de pago guardados ✓');
