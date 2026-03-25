@@ -817,47 +817,58 @@ class ProfileController
             Response::json(['error' => 'No se recibió ninguna imagen.'], 400);
         }
 
+        $db       = DB::getInstance();
         $file     = $_FILES['avatar'];
-        $allowed  = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
         $mimeType = mime_content_type($file['tmp_name']);
 
-        if (!isset($allowed[$mimeType])) {
-            Response::json(['error' => 'Formato no permitido. Solo JPG, PNG o WebP.'], 422);
+        // Fallback para celulares (iOS HEIC, Android octet-stream)
+        if (!in_array($mimeType, ['image/jpeg','image/jpg','image/png','image/webp','image/heic','image/heif'])) {
+            $ext_map = ['jpg'=>'jpg','jpeg'=>'jpg','png'=>'png','webp'=>'webp','heic'=>'jpg','heif'=>'jpg'];
+            $origExt = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            if (!isset($ext_map[$origExt])) {
+                Response::json(['error' => 'Formato no permitido. Solo JPG, PNG o WebP.'], 422);
+            }
+            $mimeType = 'image/jpeg';
         }
+        $allowed = ['image/jpeg'=>'jpg','image/jpg'=>'jpg','image/png'=>'png','image/webp'=>'webp'];
+        if (!isset($allowed[$mimeType])) $mimeType = 'image/jpeg';
         if ($file['size'] > 2 * 1024 * 1024) {
             Response::json(['error' => 'La imagen no puede superar 2MB.'], 422);
         }
 
-        // Crear carpeta si no existe
-        $uploadDir = defined('BASE_PATH')
-            ? BASE_PATH . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'avatars'
-            : __DIR__ . '/../public/uploads/avatars';
-
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
-        }
-
-        // Nombre único — eliminar avatar anterior
-        $db       = DB::getInstance();
-        $current  = $db->fetch("SELECT avatar FROM users WHERE id=?", [Auth::id()]);
-        if (!empty($current['avatar'])) {
-            $oldFile = defined('BASE_PATH')
-                ? BASE_PATH . '/public' . $current['avatar']
-                : __DIR__ . '/../public' . $current['avatar'];
-            if (file_exists($oldFile)) @unlink($oldFile);
-        }
-
         $ext      = $allowed[$mimeType];
-        $filename = 'avatar_' . Auth::id() . '_' . time() . '.' . $ext;
-        $dest     = $uploadDir . DIRECTORY_SEPARATOR . $filename;
+        $filename = 'avatars/avatar_' . Auth::id() . '_' . time() . '.' . $ext;
+        $current  = $db->fetch("SELECT avatar FROM users WHERE id=?", [Auth::id()]);
 
-        if (!move_uploaded_file($file['tmp_name'], $dest)) {
-            Response::json(['error' => 'Error al guardar la imagen.'], 500);
+        if (\MercadoSordo\Core\R2Uploader::isEnabled()) {
+            try {
+                $r2 = new \MercadoSordo\Core\R2Uploader();
+                // Eliminar avatar anterior de R2
+                if (!empty($current['avatar']) && str_contains($current['avatar'], 'r2.dev')) {
+                    $r2->delete(\MercadoSordo\Core\R2Uploader::filenameFromUrl($current['avatar']));
+                }
+                $avatarUrl = $r2->upload($file['tmp_name'], $filename, $mimeType);
+            } catch (\Exception $e) {
+                Response::json(['error' => 'Error al subir imagen: ' . $e->getMessage()], 500);
+            }
+        } else {
+            // Fallback local
+            $uploadDir = defined('BASE_PATH')
+                ? BASE_PATH . '/public/uploads/avatars'
+                : __DIR__ . '/../public/uploads/avatars';
+            if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+            $localFile = $uploadDir . '/avatar_' . Auth::id() . '_' . time() . '.' . $ext;
+            if (!empty($current['avatar']) && !str_contains($current['avatar'], 'r2.dev')) {
+                $old = defined('BASE_PATH') ? BASE_PATH . '/public' . $current['avatar'] : __DIR__ . '/../public' . $current['avatar'];
+                if (file_exists($old)) @unlink($old);
+            }
+            if (!move_uploaded_file($file['tmp_name'], $localFile)) {
+                Response::json(['error' => 'Error al guardar la imagen.'], 500);
+            }
+            $avatarUrl = '/uploads/avatars/avatar_' . Auth::id() . '_' . time() . '.' . $ext;
         }
 
-        $avatarUrl = '/uploads/avatars/' . $filename;
         $db->update('users', ['avatar' => $avatarUrl], 'id=?', [Auth::id()]);
-
         Response::json(['avatar_url' => $avatarUrl, 'message' => 'Avatar actualizado.']);
     }
 
@@ -866,10 +877,12 @@ class ProfileController
         $db   = DB::getInstance();
         $user = $db->fetch("SELECT avatar FROM users WHERE id=?", [Auth::id()]);
         if (!empty($user['avatar'])) {
-            $file = defined('BASE_PATH')
-                ? BASE_PATH . '/public' . $user['avatar']
-                : __DIR__ . '/../public' . $user['avatar'];
-            if (file_exists($file)) @unlink($file);
+            if (str_contains($user['avatar'], 'r2.dev') && \MercadoSordo\Core\R2Uploader::isEnabled()) {
+                (new \MercadoSordo\Core\R2Uploader())->delete(\MercadoSordo\Core\R2Uploader::filenameFromUrl($user['avatar']));
+            } else {
+                $file = defined('BASE_PATH') ? BASE_PATH . '/public' . $user['avatar'] : __DIR__ . '/../public' . $user['avatar'];
+                if (file_exists($file)) @unlink($file);
+            }
         }
         $db->update('users', ['avatar' => null], 'id=?', [Auth::id()]);
         Response::json(['message' => 'Avatar eliminado.']);
@@ -992,33 +1005,53 @@ class ProductImageController
         if (empty($_FILES['image'])) Response::json(['error' => 'No se recibió imagen.'], 400);
 
         $file     = $_FILES['image'];
-        $allowed  = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+        $allowed  = [
+            'image/jpeg' => 'jpg', 'image/jpg' => 'jpg',
+            'image/png'  => 'png', 'image/webp' => 'webp',
+            'image/heic' => 'jpg', 'image/heif' => 'jpg',
+            'application/octet-stream' => null // fallback celular
+        ];
         $mimeType = mime_content_type($file['tmp_name']);
-
-        if (!isset($allowed[$mimeType])) {
-            Response::json(['error' => 'Formato no permitido. Solo JPG, PNG o WebP.'], 422);
+        // Fallback: si MIME no reconocido, verificar por extensión
+        if (!isset($allowed[$mimeType]) || $allowed[$mimeType] === null) {
+            $ext_map = ['jpg'=>'jpg','jpeg'=>'jpg','png'=>'png','webp'=>'webp','heic'=>'jpg','heif'=>'jpg'];
+            $origExt = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            if (isset($ext_map[$origExt])) {
+                $mimeType = 'image/jpeg'; // normalizar
+            } else {
+                Response::json(['error' => 'Formato no permitido. Solo JPG, PNG o WebP.'], 422);
+            }
         }
         if ($file['size'] > 5 * 1024 * 1024) {
             Response::json(['error' => 'La imagen no puede superar 5MB.'], 422);
         }
+        $allowed  = ['image/jpeg'=>'jpg','image/jpg'=>'jpg','image/png'=>'png','image/webp'=>'webp'];
+        if (!isset($allowed[$mimeType])) $mimeType = 'image/jpeg';
+        $ext      = $allowed[$mimeType];
+        $filename = 'products/prod_' . $productId . '_' . uniqid() . '.' . $ext;
 
-        $ext       = $allowed[$mimeType];
-        $filename  = 'prod_' . $productId . '_' . uniqid() . '.' . $ext;
-        $dest      = $this->uploadDir() . DIRECTORY_SEPARATOR . $filename;
-
-        if (!move_uploaded_file($file['tmp_name'], $dest)) {
-            Response::json(['error' => 'Error al guardar la imagen.'], 500);
+        if (\MercadoSordo\Core\R2Uploader::isEnabled()) {
+            try {
+                $r2  = new \MercadoSordo\Core\R2Uploader();
+                $url = $r2->upload($file['tmp_name'], $filename, $mimeType);
+            } catch (\Exception $e) {
+                Response::json(['error' => 'Error al subir imagen: ' . $e->getMessage()], 500);
+            }
+        } else {
+            $dest = $this->uploadDir() . DIRECTORY_SEPARATOR . basename($filename);
+            if (!move_uploaded_file($file['tmp_name'], $dest)) {
+                Response::json(['error' => 'Error al guardar la imagen.'], 500);
+            }
+            $url = '/uploads/products/' . basename($filename);
         }
 
-        $isPrimary  = (int)($req->input('is_primary', 0));
-        $sortOrder  = (int)($req->input('sort_order', $count));
+        $isPrimary = (int)($req->input('is_primary', 0));
+        $sortOrder = (int)($req->input('sort_order', $count));
 
         // Si es primaria, quitar primary a las demás
         if ($isPrimary) {
             $db->query("UPDATE product_images SET is_primary=0 WHERE product_id=?", [$productId]);
         }
-
-        $url = '/uploads/products/' . $filename;
         $id  = $db->insert('product_images', [
             'product_id' => $productId,
             'url'        => $url,
@@ -1063,10 +1096,14 @@ class ProductImageController
             Response::json(['error' => 'Forbidden'], 403);
         }
 
-        // Eliminar archivo físico
-        $base = defined('BASE_PATH') ? BASE_PATH : dirname(__DIR__);
-        $file = $base . '/public' . $img['url'];
-        if (file_exists($file)) @unlink($file);
+        // Eliminar archivo físico (R2 o local)
+        if (str_contains($img['url'], 'r2.dev') && \MercadoSordo\Core\R2Uploader::isEnabled()) {
+            (new \MercadoSordo\Core\R2Uploader())->delete(\MercadoSordo\Core\R2Uploader::filenameFromUrl($img['url']));
+        } else {
+            $base = defined('BASE_PATH') ? BASE_PATH : dirname(__DIR__);
+            $file = $base . '/public' . $img['url'];
+            if (file_exists($file)) @unlink($file);
+        }
 
         $db->delete('product_images', 'id=?', [$imageId]);
 

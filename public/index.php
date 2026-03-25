@@ -54,6 +54,7 @@ if ($debug) {
 
 // Incluir archivos fuente (orden importa: Core primero)
 require_once $coreFile;
+require_once BASE_PATH . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'R2Uploader.php';
 require_once $controllersFile;
 
 // CORS
