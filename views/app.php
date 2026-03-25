@@ -52,8 +52,26 @@
       font-size: 1.5rem;
       color: #ffffff;
       text-decoration: none;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
     .navbar-ms .brand span { color: var(--ms-yellow); }
+    @media (max-width: 576px) {
+      .navbar-ms .brand {
+        font-size: 1.15rem;
+      }
+      .navbar-ms .brand .brand-full { display: none; }
+      .navbar-ms .brand .brand-short { display: inline; }
+      .navbar-actions a span, .navbar-actions button span {
+        font-size: .72rem;
+      }
+      .navbar-actions i { font-size: 1.1rem; }
+      .search-bar input { font-size: .85rem; }
+    }
+    @media (min-width: 577px) {
+      .navbar-ms .brand .brand-short { display: none; }
+      .navbar-ms .brand .brand-full { display: inline; }
+    }
 
     .search-bar { flex: 1; max-width: 600px; position: relative; }
     .search-bar input {
@@ -406,7 +424,8 @@
   <nav class="navbar-ms" v-if="!isAdminRoute">
     <div class="container-fluid px-3 d-flex align-items-center gap-3">
       <a href="#" class="brand" @click.prevent="navigate('home')">
-        Mercado<span>Sordo</span>
+        <span class="brand-full">Mercado<span>Sordo</span></span>
+        <span class="brand-short">MS<span style="color:var(--ms-yellow)">·</span></span>
       </a>
       <div class="search-bar d-none d-md-flex">
         <input type="text" :placeholder="'Buscar en ' + (activeCategory || 'todo MercadoSordo')"
@@ -2170,9 +2189,39 @@
             <small class="text-muted d-flex align-items-center gap-2 mb-1">
               <i class="bi bi-person-circle"></i>Vendido por <strong>{{ selectedProduct.seller_name }}</strong>
             </small>
-            <small class="text-muted d-flex align-items-center gap-2">
+            <small class="text-muted d-flex align-items-center gap-2 mb-3">
               <i class="bi bi-shield-check text-success"></i>Compra protegida
             </small>
+            <!-- Compartir en RRSS -->
+            <div class="pt-2">
+              <small class="text-muted fw-bold d-block mb-2"><i class="bi bi-share me-1"></i>Compartir</small>
+              <div class="d-flex gap-2 flex-wrap">
+                <a :href="'https://wa.me/?text=' + encodeURIComponent(selectedProduct.title + ' - ' + formatCLP(selectedProduct.price) + ' - ' + shareUrl)"
+                   target="_blank" class="btn btn-sm d-flex align-items-center gap-1 fw-bold"
+                   style="background:#25D366;color:white;border:none;border-radius:8px;font-size:.8rem">
+                  <i class="bi bi-whatsapp"></i> WhatsApp
+                </a>
+                <a :href="'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl)"
+                   target="_blank" class="btn btn-sm d-flex align-items-center gap-1 fw-bold"
+                   style="background:#1877F2;color:white;border:none;border-radius:8px;font-size:.8rem">
+                  <i class="bi bi-facebook"></i> Facebook
+                </a>
+                <a :href="'https://t.me/share/url?url=' + encodeURIComponent(shareUrl) + '&text=' + encodeURIComponent(selectedProduct.title)"
+                   target="_blank" class="btn btn-sm d-flex align-items-center gap-1 fw-bold"
+                   style="background:#229ED9;color:white;border:none;border-radius:8px;font-size:.8rem">
+                  <i class="bi bi-telegram"></i> Telegram
+                </a>
+                <a :href="'https://www.tiktok.com/share?url=' + encodeURIComponent(shareUrl)"
+                   target="_blank" class="btn btn-sm d-flex align-items-center gap-1 fw-bold"
+                   style="background:#000;color:white;border:none;border-radius:8px;font-size:.8rem">
+                  <i class="bi bi-tiktok"></i> TikTok
+                </a>
+                <button @click="copyShareLink" class="btn btn-sm d-flex align-items-center gap-1 fw-bold"
+                        style="background:var(--ms-blue);color:white;border:none;border-radius:8px;font-size:.8rem">
+                  <i class="bi bi-link-45deg"></i> Copiar link
+                </button>
+              </div>
+            </div>
           </div>
         </div>
         <!-- Description -->
@@ -4433,6 +4482,26 @@ const app = createApp({
       return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(v || 0);
     }
 
+    // URL para compartir producto
+    const shareUrl = Vue.computed(() => {
+      if (!selectedProduct.value?.slug) return window.location.href;
+      return window.location.origin + '/products/' + selectedProduct.value.slug;
+    });
+
+    async function copyShareLink() {
+      const url = shareUrl.value;
+      try {
+        await navigator.clipboard.writeText(url);
+        toast('🔗 Link copiado al portapapeles');
+      } catch {
+        const el = document.createElement('input');
+        el.value = url; document.body.appendChild(el);
+        el.select(); document.execCommand('copy');
+        document.body.removeChild(el);
+        toast('🔗 Link copiado');
+      }
+    }
+
     function formatDate(d) {
       return d ? new Date(d).toLocaleDateString('es-CL') : '';
     }
@@ -4719,6 +4788,7 @@ const app = createApp({
       confirmDeleteProduct, doDeleteProduct, getCategoryName,
       updateAdminUser, updateOrderStatus,
       formatCLP, formatDate, statusBadge, statusLabel, buyNow,
+        shareUrl, copyShareLink,
       vendorOrders, vendorOrdersLoading, vendorOrderFilter, selectedVendorOrder,
       vendorOrdersBadge, orderActionLoading, dispatchForm, showCancelOrder, cancelReason,
       orderMessages, chatMessage,
