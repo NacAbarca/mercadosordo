@@ -660,7 +660,35 @@
           <input type="email" class="form-control" v-model="registerForm.email"></div>
         <div class="mb-3"><label class="form-label fw-bold">Contraseña</label>
           <input type="password" class="form-control" v-model="registerForm.password"></div>
-        <button class="btn-primary-ms mb-3" @click="doRegister" :disabled="auth.loading">
+
+        <!-- Consentimiento legal -->
+        <div class="mb-3 p-3 rounded" style="background:rgba(27,79,138,0.06);border:1px solid rgba(27,79,138,0.15)">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="consent1" v-model="registerForm.consentTerms">
+            <label class="form-check-label small" for="consent1">
+              He leído y acepto los
+              <a href="#" @click.prevent="showLegal('terms')" class="fw-bold text-primary">Términos y Condiciones</a>
+              de uso de MercadoSordo. <span class="text-danger">*</span>
+            </label>
+          </div>
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="consent2" v-model="registerForm.consentPrivacy">
+            <label class="form-check-label small" for="consent2">
+              He leído y acepto la
+              <a href="#" @click.prevent="showLegal('privacy')" class="fw-bold text-primary">Política de Privacidad</a>
+              y autorizo el tratamiento de mis datos personales conforme a la Ley 19.628. <span class="text-danger">*</span>
+            </label>
+          </div>
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="consent3" v-model="registerForm.consentMarketing">
+            <label class="form-check-label small" for="consent3">
+              <span class="text-muted">(Opcional)</span> Acepto recibir ofertas, novedades y comunicaciones de MercadoSordo por email.
+            </label>
+          </div>
+        </div>
+
+        <button class="btn-primary-ms mb-3" @click="doRegister"
+                :disabled="auth.loading || !registerForm.consentTerms || !registerForm.consentPrivacy">
           <span v-if="auth.loading" class="spinner-border spinner-border-sm me-2"></span>
           Registrarme
         </button>
@@ -670,6 +698,30 @@
         <div v-if="auth.error" class="alert alert-danger mt-3 mb-0 small">{{ auth.error }}</div>
       </div>
     </template>
+
+    <!-- MODAL LEGAL — Términos y Política -->
+    <div v-if="legalModal.show" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+         style="background:rgba(0,0,0,0.6);z-index:9999;padding:16px" @click.self="legalModal.show=false">
+      <div class="bg-white rounded-3 shadow-lg d-flex flex-column" style="max-width:700px;width:100%;max-height:85vh">
+        <div class="d-flex justify-content-between align-items-center p-4 border-bottom">
+          <h5 class="fw-bold mb-0" style="color:var(--ms-blue)">
+            <i class="bi bi-shield-check me-2"></i>
+            {{ legalModal.type === 'terms' ? 'Términos y Condiciones' : 'Política de Privacidad' }}
+          </h5>
+          <button class="btn btn-sm btn-outline-secondary" @click="legalModal.show=false">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div class="p-4 overflow-auto flex-grow-1" style="font-size:.88rem;line-height:1.7" v-html="legalModal.content"></div>
+        <div class="p-3 border-top d-flex justify-content-end gap-2">
+          <button class="btn btn-outline-secondary btn-sm" @click="legalModal.show=false">Cerrar</button>
+          <button class="btn btn-primary btn-sm fw-bold" @click="acceptLegal">
+            <i class="bi bi-check-circle me-1"></i>
+            Acepto
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- MY ORDERS -->
     <template v-if="currentView === 'orders'">
@@ -3465,7 +3517,11 @@ const app = createApp({
 
     const auth = ref({ user: null, loading: false, error: null });
     const loginForm = ref({ email: '', password: '' });
-    const registerForm = ref({ name: '', email: '', password: '' });
+    const registerForm = ref({
+      name: '', email: '', password: '',
+      consentTerms: false, consentPrivacy: false, consentMarketing: false
+    });
+    const legalModal = ref({ show: false, type: 'terms', content: '' });
 
     const categories = ref([]);
     const products = ref({ data: [], total: 0, current_page: 1, last_page: 1, loading: false });
@@ -4649,6 +4705,47 @@ const app = createApp({
       finally { auth.value.loading = false; }
     }
 
+    const legalTexts = {
+      terms: `
+        <h6>1. Descripción del Servicio</h6>
+        <p>MercadoSordo es una plataforma de comercio electrónico tipo marketplace para la Comunidad Sorda de Chile. Actuamos como intermediario entre compradores y vendedores.</p>
+        <h6>2. Comisión de plataforma</h6>
+        <p>MercadoSordo cobra un <strong>5% de comisión</strong> sobre cada transacción completada, igual para todos los vendedores.</p>
+        <h6>3. Protocolo de seguridad</h6>
+        <p>Todas las transacciones utilizan un sistema de confirmación en 4 pasos: orden → aceptación → despacho → confirmación de recepción.</p>
+        <h6>4. Conducta del usuario</h6>
+        <p>Está prohibido publicar productos ilegales, realizar fraudes, acosar usuarios o manipular el sistema de reputación. Los administradores no pueden realizar compras. Los vendedores no pueden comprar sus propios productos.</p>
+        <h6>5. Ley aplicable</h6>
+        <p>Ley N° 19.496 (Consumidor), Ley N° 19.628 (Privacidad), Ley N° 20.007 (Comercio Electrónico). Jurisdicción: Santiago de Chile.</p>
+        <p class="text-muted small">Versión completa disponible en la sección Legal de la plataforma.</p>
+      `,
+      privacy: `
+        <h6>1. Datos que recopilamos</h6>
+        <p>Nombre, email, RUT, teléfono, dirección, foto de perfil, historial de compras y mensajes entre usuarios.</p>
+        <h6>2. Para qué usamos tus datos</h6>
+        <p>Gestionar tu cuenta, procesar pagos, enviar notificaciones de pedidos, verificar identidad (RUT) y mejorar la plataforma.</p>
+        <h6>3. Con quién compartimos</h6>
+        <p>Solo con proveedores necesarios: Mercado Pago y Khipu (pagos), Railway (hosting), Cloudflare R2 (imágenes), Resend (emails). <strong>No vendemos tus datos.</strong></p>
+        <h6>4. Seguridad</h6>
+        <p>Contraseñas cifradas con bcrypt, tokens seguros, conexiones HTTPS, prepared statements contra SQL injection.</p>
+        <h6>5. Tus derechos (Ley 19.628)</h6>
+        <p>Tienes derecho a acceder, rectificar, cancelar u oponerte al tratamiento de tus datos. Escríbenos a admin@mercadosordo.cl.</p>
+        <h6>6. Cookies</h6>
+        <p>Usamos cookies de sesión (<code>ms_token</code>) y carrito (<code>ms_cart</code>). No usamos cookies publicitarias.</p>
+        <p class="text-muted small">Versión completa disponible en la sección Legal de la plataforma.</p>
+      `
+    };
+
+    function showLegal(type) {
+      legalModal.value = { show: true, type, content: legalTexts[type] };
+    }
+
+    function acceptLegal() {
+      if (legalModal.value.type === 'terms') registerForm.value.consentTerms = true;
+      if (legalModal.value.type === 'privacy') registerForm.value.consentPrivacy = true;
+      legalModal.value.show = false;
+    }
+
     async function doRegister() {
       auth.value.loading = true; auth.value.error = null;
       try {
@@ -4849,7 +4946,7 @@ const app = createApp({
     return {
       currentView, appLoading, isAdminRoute, adminView, adminSearch, adminOrderFilter,
       searchQuery, activeCategory, detailQty, activeImage,
-      auth, loginForm, registerForm,
+      auth, loginForm, registerForm, legalModal, showLegal, acceptLegal,
       categories, products, filters, selectedProduct,
       cart, orders, ordersLoading,
       adminDash, adminUsers, adminProducts, adminOrders,
