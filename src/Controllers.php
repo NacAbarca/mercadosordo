@@ -788,6 +788,14 @@ trait ImageUploadTrait
      */
     private function detectImageMime(string $tmpPath, string $originalName = ''): ?string
     {
+        // Validar que el archivo existe y fue subido correctamente
+        if (empty($tmpPath) || !file_exists($tmpPath) || !is_uploaded_file($tmpPath)) {
+            // Fallback solo por extensión
+            $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+            $extMap = ['jpg'=>'image/jpeg','jpeg'=>'image/jpeg','png'=>'image/png','webp'=>'image/webp','heic'=>'image/jpeg','heif'=>'image/jpeg'];
+            return $extMap[$ext] ?? null;
+        }
+
         // 1. Leer magic bytes (primeros 12 bytes)
         $handle = fopen($tmpPath, 'rb');
         if (!$handle) return null;
@@ -928,6 +936,14 @@ class ProfileController
 
         $db       = DB::getInstance();
         $file = $_FILES['avatar'];
+        if (!isset($file['tmp_name']) || $file['error'] !== UPLOAD_ERR_OK) {
+            $errMsg = [
+                UPLOAD_ERR_PARTIAL => 'La imagen no se subió completamente. Intenta de nuevo.',
+                UPLOAD_ERR_NO_FILE => 'No se recibió ninguna imagen.',
+            ];
+            $msg = $errMsg[$file['error'] ?? UPLOAD_ERR_NO_FILE] ?? 'Error al subir imagen. Intenta de nuevo.';
+            Response::json(['error' => $msg], 400);
+        }
         if ($file['size'] > 2 * 1024 * 1024) {
             Response::json(['error' => 'La imagen no puede superar 2MB.'], 422);
         }
@@ -1107,7 +1123,19 @@ class ProductImageController
 
         if (empty($_FILES['image'])) Response::json(['error' => 'No se recibió imagen.'], 400);
 
-        $file     = $_FILES['image'];
+        $file = $_FILES['image'];
+        if (!isset($file['tmp_name']) || $file['error'] !== UPLOAD_ERR_OK) {
+            $errMsg = [
+                UPLOAD_ERR_INI_SIZE   => 'Imagen muy grande (límite del servidor).',
+                UPLOAD_ERR_FORM_SIZE  => 'Imagen muy grande.',
+                UPLOAD_ERR_PARTIAL    => 'La imagen no se subió completamente. Intenta de nuevo.',
+                UPLOAD_ERR_NO_FILE    => 'No se recibió ninguna imagen.',
+                UPLOAD_ERR_NO_TMP_DIR => 'Error de servidor (tmp).',
+                UPLOAD_ERR_CANT_WRITE => 'Error al guardar imagen.',
+            ];
+            $msg = $errMsg[$file['error'] ?? UPLOAD_ERR_NO_FILE] ?? 'Error al subir imagen. Intenta de nuevo.';
+            Response::json(['error' => $msg], 400);
+        }
         if ($file['size'] > 5 * 1024 * 1024) {
             Response::json(['error' => 'La imagen no puede superar 5MB.'], 422);
         }

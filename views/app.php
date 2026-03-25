@@ -3521,27 +3521,40 @@ const app = createApp({
       for (let i = 0; i < pending.length; i++) {
         const img = pending[i];
         img.uploading = true;
-        try {
-          const fd = new FormData();
-          fd.append('image', img.file);
-          fd.append('sort_order', productImages.value.indexOf(img));
-          fd.append('is_primary', img.is_primary ? '1' : '0');
-          const res  = await fetch(`/api/products/${productId}/images`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` },
-            body: fd
-          });
-          const data = await res.json();
-          if (!res.ok) throw data;
-          img.id      = data.id;
-          img.url     = data.url;
-          img.error   = false;
-        } catch (e) {
-          img.error = true;
-          imgErrors.value.push(`Error al subir imagen ${i + 1}.`);
-        } finally {
-          img.uploading = false;
+        img.error = false;
+
+        // Reintento automático hasta 3 veces (útil en mobile con conexión lenta)
+        let lastError = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const fd = new FormData();
+            fd.append('image', img.file, img.file.name || `image_${i}.jpg`);
+            fd.append('sort_order', productImages.value.indexOf(img));
+            fd.append('is_primary', img.is_primary ? '1' : '0');
+            const res  = await fetch(`/api/products/${productId}/images`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` },
+              body: fd
+            });
+            const data = await res.json();
+            if (!res.ok) throw data;
+            img.id      = data.id;
+            img.url     = data.url;
+            img.error   = false;
+            lastError   = null;
+            break; // éxito — salir del loop de reintentos
+          } catch (e) {
+            lastError = e;
+            if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt)); // esperar antes de reintentar
+          }
         }
+
+        if (lastError) {
+          img.error = true;
+          const msg = lastError?.error || lastError?.message || 'Error de conexión';
+          imgErrors.value.push(`Error al subir imagen ${i + 1}: ${msg}`);
+        }
+        img.uploading = false;
       }
       // Actualizar sort_order de todas
       await syncImageOrder(productId);
