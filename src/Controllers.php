@@ -272,11 +272,21 @@ class ProductController
     {
         $db   = DB::getInstance();
         $page = (int)$req->input('page', 1);
-        $sql  = "SELECT p.*, pi.url AS primary_image FROM products p
-                 LEFT JOIN product_images pi ON pi.product_id=p.id AND pi.is_primary=1
+        $sql  = "SELECT p.*, 
+                    (SELECT url FROM product_images WHERE product_id=p.id AND is_primary=1 LIMIT 1) AS primary_image
+                 FROM products p
                  WHERE p.seller_id=? AND p.status != 'deleted'
                  ORDER BY p.created_at DESC";
-        Response::json($db->paginate($sql, [Auth::id()], $page));
+        $result = $db->paginate($sql, [Auth::id()], $page);
+        // Agregar imágenes completas a cada producto
+        foreach ($result['data'] as &$product) {
+            $product['images'] = $db->fetchAll(
+                "SELECT id, url, is_primary, sort_order FROM product_images 
+                 WHERE product_id=? ORDER BY sort_order ASC, is_primary DESC",
+                [$product['id']]
+            );
+        }
+        Response::json($result);
     }
 
     private function uniqueSlug(string $title, DB $db): string

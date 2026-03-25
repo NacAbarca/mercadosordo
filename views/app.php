@@ -1181,13 +1181,20 @@
                   <div class="position-relative rounded overflow-hidden border"
                        :class="idx===0 ? 'border-primary border-2' : 'border-light'"
                        style="aspect-ratio:1;background:#f8f8f8">
-                    <img v-if="img.preview || img.url"
+                    <img v-if="img.preview || (img.url && !img.isLegacy)"
                          :src="img.preview || img.url"
                          class="w-100 h-100"
                          style="object-fit:cover"
                          @error="img.loadError=true"
                          v-show="!img.loadError">
-                    <div v-if="!img.preview && (!img.url || img.loadError)"
+                    <div v-if="img.isLegacy && !img.preview"
+                         class="w-100 h-100 d-flex flex-column align-items-center justify-content-center text-center p-1"
+                         style="font-size:.6rem;gap:2px;background:#fff3cd">
+                      <i class="bi bi-exclamation-triangle text-warning" style="font-size:1rem"></i>
+                      <span class="text-warning fw-bold">Imagen local</span>
+                      <span class="text-muted">Reemplazar</span>
+                    </div>
+                    <div v-if="!img.preview && !img.isLegacy && (!img.url || img.loadError)"
                          class="w-100 h-100 d-flex flex-column align-items-center justify-content-center text-muted"
                          style="font-size:.65rem;gap:2px">
                       <i class="bi bi-image" style="font-size:1.2rem"></i>
@@ -3562,9 +3569,13 @@ const app = createApp({
     function loadProductImages(product) {
       if (product.images && product.images.length) {
         productImages.value = product.images.map((img, i) => ({
-          id: img.id, url: img.url, preview: null,
-          file: null, uploading: false, error: false,
-          is_primary: img.is_primary || i === 0
+          id: img.id,
+          url: img.url,
+          // Si la URL es relativa (/uploads/...) y estamos en producción Railway → no hay archivo
+          preview: null,
+          file: null, uploading: false, error: false, loadError: false,
+          is_primary: img.is_primary || i === 0,
+          isLegacy: img.url && img.url.startsWith('/uploads/') // imagen local antigua
         }));
       } else {
         productImages.value = [];
