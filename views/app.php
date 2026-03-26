@@ -689,47 +689,12 @@
           <p class="text-muted small mb-4">Para continuar, necesitamos tu consentimiento sobre cómo usamos tu información.</p>
 
           <div class="d-flex flex-column gap-3">
-            <!-- T&C -->
-            <div class="p-3 rounded-3 border" :class="consentModal.terms ? 'border-success bg-success bg-opacity-10' : 'border-light'">
-              <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                  <div class="fw-bold small">📋 Términos y Condiciones</div>
-                  <div class="text-muted" style="font-size:.78rem">Comisión 5%, protocolo de seguridad, productos permitidos, conducta del usuario.</div>
-                </div>
-                <button class="btn btn-sm btn-outline-primary flex-shrink-0" @click="showConsentDetail('terms')" style="font-size:.78rem">
-                  Leer
-                </button>
-              </div>
-              <div class="form-check mt-2">
-                <input class="form-check-input" type="checkbox" id="cT" v-model="consentModal.terms">
-                <label class="form-check-label small fw-bold" for="cT">Acepto los Términos y Condiciones <span class="text-danger">*</span></label>
-              </div>
-            </div>
-
-            <!-- Privacidad -->
-            <div class="p-3 rounded-3 border" :class="consentModal.privacy ? 'border-success bg-success bg-opacity-10' : 'border-light'">
-              <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                  <div class="fw-bold small">🔒 Política de Privacidad</div>
-                  <div class="text-muted" style="font-size:.78rem">Qué datos guardamos, cómo los usamos y tus derechos según Ley 19.628.</div>
-                </div>
-                <button class="btn btn-sm btn-outline-primary flex-shrink-0" @click="showConsentDetail('privacy')" style="font-size:.78rem">
-                  Leer
-                </button>
-              </div>
-              <div class="form-check mt-2">
-                <input class="form-check-input" type="checkbox" id="cP" v-model="consentModal.privacy">
-                <label class="form-check-label small fw-bold" for="cP">Acepto la Política de Privacidad <span class="text-danger">*</span></label>
-              </div>
-            </div>
-
-            <!-- Marketing opcional -->
-            <div class="p-3 rounded-3 border border-light">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="cM" v-model="consentModal.marketing">
-                <label class="form-check-label small" for="cM">
-                  <span class="fw-bold">📧 Comunicaciones (opcional)</span><br>
-                  <span class="text-muted" style="font-size:.78rem">Acepto recibir ofertas y novedades de MercadoSordo por email. Puedes cancelar en cualquier momento.</span>
+            <!-- Condiciones simplificadas -->
+            <div class="p-3 rounded-3" style="background:rgba(27,79,138,0.06)">
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="scA" v-model="sellerConsentModal.accepted">
+                <label class="form-check-label small fw-bold" for="scA">
+                  Acepto las condiciones para vendedores y los Términos y Condiciones de MercadoSordo. <span class="text-danger">*</span>
                 </label>
               </div>
             </div>
@@ -749,29 +714,7 @@
       </div>
     </div>
 
-    <!-- MODAL DETALLE LEGAL — para leer T&C o Privacidad -->
-    <div v-if="legalModal.show" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-         style="background:rgba(0,0,0,0.7);z-index:10000;padding:16px">
-      <div class="bg-white rounded-3 shadow-lg d-flex flex-column" style="max-width:680px;width:100%;max-height:85vh">
-        <div class="d-flex justify-content-between align-items-center p-3 border-bottom">
-          <h6 class="fw-bold mb-0" style="color:var(--ms-blue)">
-            <i class="bi bi-shield-check me-2"></i>
-            <span v-if="legalModal.type === 'terms'">Términos y Condiciones</span>
-            <span v-else>Política de Privacidad</span>
-          </h6>
-          <button class="btn btn-sm btn-outline-secondary" @click="legalModal.show=false">
-            <i class="bi bi-x-lg"></i>
-          </button>
-        </div>
-        <div class="p-4 overflow-auto flex-grow-1" style="font-size:.85rem;line-height:1.7" v-html="legalModal.content"></div>
-        <div class="p-3 border-top d-flex justify-content-end gap-2">
-          <button class="btn btn-outline-secondary btn-sm" @click="legalModal.show=false">Cerrar</button>
-          <button class="btn btn-success btn-sm fw-bold" @click="acceptLegal">
-            <i class="bi bi-check-circle me-1"></i>Acepto
-          </button>
-        </div>
-      </div>
-    </div>
+
 
     <!-- MODAL CONSENTIMIENTO VENDEDOR — para activar rol seller -->
     <div v-if="sellerConsentModal.show" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
@@ -3610,8 +3553,6 @@ const app = createApp({
       name: '', email: '', password: '',
       consentTerms: false, consentPrivacy: false, consentMarketing: false
     });
-    const legalModal        = ref({ show: false, type: 'terms', content: '' });
-    const consentModal      = ref({ show: false, terms: false, privacy: false, marketing: false });
     const sellerConsentModal = ref({ show: false, accepted: false, loading: false });
 
     const categories = ref([]);
@@ -5088,12 +5029,12 @@ const app = createApp({
     return {
       currentView, appLoading, isAdminRoute, adminView, adminSearch, adminOrderFilter,
       searchQuery, activeCategory, detailQty, activeImage,
-      auth, loginForm, registerForm, legalModal, consentModal, sellerConsentModal,
+      auth, loginForm, registerForm, sellerConsentModal,
       categories, products, filters, selectedProduct,
       cart, orders, ordersLoading,
       adminDash, adminUsers, adminProducts, adminOrders,
       toasts,
-      navigate, doLogin, doRegister, logout, acceptConsent, showConsentDetail, acceptLegal, openSellerConsent, activateSeller,
+      navigate, doLogin, doRegister, logout, openSellerConsent, activateSeller,
       loadProducts, viewProduct, filterByCategory, doSearch, applyFilters, resetFilters, changePage,
       addToCart, updateCartItem, removeCartItem, toggleWishlist,
       loadOrders, loadOrderDetail, selectedOrder, retryPayment, loadDashboard, loadAdminUsers, loadAdminProducts, loadAdminOrders,
