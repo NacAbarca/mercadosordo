@@ -52,26 +52,8 @@
       font-size: 1.5rem;
       color: #ffffff;
       text-decoration: none;
-      white-space: nowrap;
-      flex-shrink: 0;
     }
     .navbar-ms .brand span { color: var(--ms-yellow); }
-    @media (max-width: 576px) {
-      .navbar-ms .brand {
-        font-size: 1.15rem;
-      }
-      .navbar-ms .brand .brand-full { display: none; }
-      .navbar-ms .brand .brand-short { display: inline; }
-      .navbar-actions a span, .navbar-actions button span {
-        font-size: .72rem;
-      }
-      .navbar-actions i { font-size: 1.1rem; }
-      .search-bar input { font-size: .85rem; }
-    }
-    @media (min-width: 577px) {
-      .navbar-ms .brand .brand-short { display: none; }
-      .navbar-ms .brand .brand-full { display: inline; }
-    }
 
     .search-bar { flex: 1; max-width: 600px; position: relative; }
     .search-bar input {
@@ -156,6 +138,8 @@
       border-radius: 50%; width: 18px; height: 18px;
       display: flex; align-items: center; justify-content: center;
       position: absolute; top: -4px; right: -4px;
+      border: 2px solid white;
+      z-index: 10;
     }
 
     /* ─── CATEGORIES NAV ─── */
@@ -265,25 +249,6 @@
     .buy-box {
       background: var(--ms-card); border-radius: var(--ms-radius);
       padding: 24px; box-shadow: var(--ms-shadow);
-    }
-    /* Precio tachado en detalle producto — rojo tachado */
-    .detail-compare-price {
-      font-size: 1rem;
-      color: #e53935;
-      text-decoration: line-through;
-      font-weight: 500;
-    }
-    /* Precio actual en detalle producto — grande y bold */
-    .detail-price {
-      font-family: 'Sora', sans-serif;
-      font-size: 2rem;
-      font-weight: 800;
-      color: var(--ms-blue);
-      margin: 0;
-      line-height: 1.1;
-    }
-    @media (max-width: 576px) {
-      .detail-price { font-size: 1.6rem; }
     }
     .btn-add-cart {
       background: var(--ms-blue); color: white; border: none;
@@ -443,8 +408,7 @@
   <nav class="navbar-ms" v-if="!isAdminRoute">
     <div class="container-fluid px-3 d-flex align-items-center gap-3">
       <a href="#" class="brand" @click.prevent="navigate('home')">
-        <span class="brand-full">Mercado<span>Sordo</span></span>
-        <span class="brand-short">MS<span style="color:var(--ms-yellow)">·</span></span>
+        Mercado<span>Sordo</span>
       </a>
       <div class="search-bar d-none d-md-flex">
         <input type="text" :placeholder="'Buscar en ' + (activeCategory || 'todo MercadoSordo')"
@@ -472,13 +436,7 @@
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('profile')"><i class="bi bi-person me-2"></i>Mi perfil</a></li>
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('orders')"><i class="bi bi-box me-2"></i>Mis compras</a></li>
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('my-products')"><i class="bi bi-grid me-2"></i>Mis ventas</a></li>
-              <!-- Mis pedidos — solo seller y admin -->
-              <li v-if="auth.user.role === 'seller' || auth.user.role === 'admin'">
-                <a class="dropdown-item" href="#" @click.prevent="navigate('vendor-orders')">
-                  <i class="bi bi-bag-check me-2"></i>Mis pedidos
-                  <span class="badge bg-danger ms-1" v-if="vendorOrdersBadge>0">{{vendorOrdersBadge}}</span>
-                </a>
-              </li>
+              <li><a class="dropdown-item" href="#" @click.prevent="navigate('vendor-orders')"><i class="bi bi-bag-check me-2"></i>Mis pedidos <span class="badge bg-danger ms-1" v-if="vendorOrdersBadge>0">{{vendorOrdersBadge}}</span></a></li>
               <li v-if="auth.user.role === 'admin'"><a class="dropdown-item" href="#" @click.prevent="navigate('admin')"><i class="bi bi-shield me-2"></i>Admin Panel</a></li>
               <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item text-danger" href="#" @click.prevent="logout"><i class="bi bi-box-arrow-right me-2"></i>Salir</a></li>
@@ -677,10 +635,6 @@
       </div>
     </template>
 
-
-
-
-
     <!-- MY ORDERS -->
     <template v-if="currentView === 'orders'">
       <h3 class="section-title mb-4"><i class="bi bi-bag me-2 text-primary"></i>Mis compras</h3>
@@ -785,21 +739,11 @@
               </div>
             </div>
 
-            <!-- Botones acción comprador -->
-            <div class="mt-3 d-flex gap-2" v-if="['dispatched','in_transit'].includes(selectedOrder.status)">
-              <button class="btn btn-success fw-bold" @click="confirmOrderReceived(selectedOrder.id)">
-                <i class="bi bi-check-circle me-1"></i>Confirmar recepción
-              </button>
-              <button class="btn btn-outline-warning btn-sm" @click="openDisputeModal(selectedOrder.id)">
-                <i class="bi bi-shield-exclamation me-1"></i>Abrir disputa
-              </button>
-            </div>
-
             <!-- Tracking -->
             <div class="mt-4" v-if="selectedOrder.tracking?.length">
               <h6 class="fw-bold mb-3"><i class="bi bi-truck me-2 text-primary"></i>Seguimiento</h6>
               <div class="d-flex flex-column gap-2">
-                <div v-for="t in [...(selectedOrder.tracking||[])].reverse()" :key="t.id"
+                <div v-for="t in selectedOrder.tracking" :key="t.id"
                      class="d-flex gap-3 align-items-start">
                   <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center flex-shrink-0"
                        style="width:28px;height:28px;font-size:.7rem;color:white">
@@ -852,41 +796,6 @@
 
     <!-- ─── MIS VENTAS ─── -->
     <template v-if="currentView === 'my-products'">
-      <!-- Si es buyer → mostrar modal vendedor en lugar de la vista -->
-      <div v-if="auth.user?.role === 'buyer' && sellerModal.show" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-           style="background:rgba(10,22,40,0.82);z-index:9999;padding:16px">
-        <div class="bg-white rounded-3 shadow-lg" style="max-width:460px;width:100%">
-          <div class="text-center p-4" style="background:var(--ms-blue);border-radius:12px 12px 0 0">
-            <div style="font-size:2rem">🛍️</div>
-            <div style="font-family:Sora,sans-serif;font-size:1.4rem;font-weight:800;color:white">Quiero ser Vendedor</div>
-            <div class="text-white-50 small">MercadoSordo</div>
-          </div>
-          <div class="p-4">
-            <p class="text-muted small mb-3">Para publicar productos acepta estas condiciones:</p>
-            <ul style="font-size:.88rem;line-height:1.9;color:#444;padding-left:1.2rem">
-              <li>Comisión del <strong>5%</strong> sobre cada venta completada</li>
-              <li>Despachar dentro del plazo acordado con el comprador</li>
-              <li>Solo publicar productos legales y de tu propiedad</li>
-              <li>Responder mensajes y disputas dentro de 48 horas</li>
-            </ul>
-            <div class="form-check p-3 rounded-3 mt-3" style="background:rgba(27,79,138,0.07)">
-              <input class="form-check-input" type="checkbox" id="smAcept" v-model="sellerModal.accepted">
-              <label class="form-check-label small fw-bold" for="smAcept">
-                Acepto estas condiciones y quiero activar mi cuenta vendedor
-              </label>
-            </div>
-          </div>
-          <div class="p-4 pt-0 d-flex gap-2">
-            <button class="btn btn-outline-secondary flex-fill" @click="navigate('home')">Cancelar</button>
-            <button class="btn btn-primary fw-bold flex-fill" @click="doActivateSeller"
-                    :disabled="!sellerModal.accepted || sellerModal.loading"
-                    style="background:var(--ms-blue);border:none">
-              <span v-if="sellerModal.loading" class="spinner-border spinner-border-sm me-1"></span>
-              <i class="bi bi-shop me-1" v-else></i>Activar cuenta vendedor
-            </button>
-          </div>
-        </div>
-      </div>
       <div class="d-flex align-items-center justify-content-between mb-3">
         <h3 class="section-title mb-0"><i class="bi bi-shop me-2 text-primary"></i>Mis ventas</h3>
         <button class="btn btn-primary btn-sm fw-bold px-3" @click="openProductForm(null)">
@@ -895,20 +804,6 @@
       </div>
 
       <!-- TABS -->
-      <!-- Banner límite buyer -->
-      <div v-if="auth.user?.role === 'buyer'" class="alert mb-3 d-flex justify-content-between align-items-center py-2"
-           style="background:#FFF8E1;border:1px solid #F4C430;border-radius:8px">
-        <span class="small">
-          <i class="bi bi-info-circle me-1" style="color:#F4C430"></i>
-          Cuenta comprador — puedes publicar hasta <strong>2 productos</strong>.
-          Tienes <strong>{{ (myProducts.data||[]).filter(p=>p.status!=='deleted').length }}/2</strong> publicados.
-        </span>
-        <button class="btn btn-sm fw-bold ms-3 flex-shrink-0" @click="sellerModal.show=true"
-                style="background:var(--ms-blue);color:white;border:none;font-size:.78rem;border-radius:6px">
-          🛍️ Ser Vendedor
-        </button>
-      </div>
-
       <ul class="nav nav-tabs mb-3" id="sellerTabs">
         <li class="nav-item">
           <a class="nav-link" :class="{active: sellerTab==='list'}" href="#" @click.prevent="sellerTab='list'">
@@ -1120,7 +1015,7 @@
                 <small class="text-muted" v-if="productForm.price > 0">{{ formatCLP(productForm.price) }}</small>
               </div>
 
-              <!-- Precio tachado con indicador % -->
+              <!-- Precio comparación -->
               <div class="col-md-4">
                 <label class="form-label fw-bold">Precio tachado <span class="text-muted fw-normal small">(opcional)</span></label>
                 <div class="input-group">
@@ -1128,18 +1023,9 @@
                   <input type="number" class="form-control" v-model.number="productForm.compare_price"
                          placeholder="Precio antes del descuento" min="0">
                 </div>
-                <!-- Precio mayor = sube = rojo (precio subió) -->
-                <div v-if="productForm.compare_price > 0 && productForm.price > 0">
-                  <small v-if="productForm.compare_price > productForm.price" class="fw-bold text-success">
-                    <i class="bi bi-tag-fill me-1"></i>
-                    {{ Math.round((1 - productForm.price / productForm.compare_price) * 100) }}% de descuento
-                  </small>
-                  <small v-else-if="productForm.compare_price < productForm.price" class="fw-bold text-danger">
-                    <i class="bi bi-graph-up-arrow me-1"></i>
-                    {{ Math.round((productForm.price / productForm.compare_price - 1) * 100) }}% más caro que antes
-                  </small>
-                  <small v-else class="text-muted">Sin cambio de precio</small>
-                </div>
+                <small class="text-success fw-bold" v-if="productForm.compare_price > productForm.price && productForm.price > 0">
+                  {{ Math.round((1 - productForm.price / productForm.compare_price) * 100) }}% de descuento
+                </small>
               </div>
 
               <!-- Stock -->
@@ -1259,25 +1145,7 @@
                   <div class="position-relative rounded overflow-hidden border"
                        :class="idx===0 ? 'border-primary border-2' : 'border-light'"
                        style="aspect-ratio:1;background:#f8f8f8">
-                    <img v-if="img.preview || (img.url && !img.isLegacy)"
-                         :src="img.preview || img.url"
-                         class="w-100 h-100"
-                         style="object-fit:cover"
-                         @error="img.loadError=true"
-                         v-show="!img.loadError">
-                    <div v-if="img.isLegacy && !img.preview"
-                         class="w-100 h-100 d-flex flex-column align-items-center justify-content-center text-center p-1"
-                         style="font-size:.6rem;gap:2px;background:#fff3cd">
-                      <i class="bi bi-exclamation-triangle text-warning" style="font-size:1rem"></i>
-                      <span class="text-warning fw-bold">Imagen local</span>
-                      <span class="text-muted">Reemplazar</span>
-                    </div>
-                    <div v-if="!img.preview && !img.isLegacy && (!img.url || img.loadError)"
-                         class="w-100 h-100 d-flex flex-column align-items-center justify-content-center text-muted"
-                         style="font-size:.65rem;gap:2px">
-                      <i class="bi bi-image" style="font-size:1.2rem"></i>
-                      <span>Sin imagen</span>
-                    </div>
+                    <img :src="img.preview || img.url" class="w-100 h-100" style="object-fit:cover">
                     <!-- Badge principal -->
                     <span v-if="idx===0"
                           class="position-absolute top-0 start-0 badge bg-primary m-1"
@@ -2087,36 +1955,6 @@
               Sin métodos de pago activos. Los compradores no podrán completar el pago de tus productos.
             </div>
 
-            <!-- Régimen tributario -->
-            <div class="card border-0 rounded-3 p-3 mb-3" style="background:rgba(27,79,138,0.06)">
-              <div class="fw-bold mb-2"><i class="bi bi-percent me-2 text-primary"></i>Régimen tributario (IVA)</div>
-              <div class="row g-2 align-items-end">
-                <div class="col-md-7">
-                  <label class="form-label small fw-bold">Tasa IVA que aplicas a tus ventas</label>
-                  <select class="form-select" v-model.number="paymentMethods.tax_rate">
-                    <option :value="0">0% — Exento (Persona natural sin inicio de actividades)</option>
-                    <option :value="10">10% — Tasa reducida</option>
-                    <option :value="19">19% — Estándar (Empresa / Persona jurídica)</option>
-                    <option :value="-1">Otro % — Personalizado</option>
-                  </select>
-                  <div class="mt-2" v-if="paymentMethods.tax_rate === -1">
-                    <div class="input-group" style="max-width:200px">
-                      <input type="number" class="form-control" v-model.number="paymentMethods.tax_rate_custom"
-                             min="0" max="100" step="0.1" placeholder="0.0">
-                      <span class="input-group-text">%</span>
-                    </div>
-                  </div>
-                </div>
-                <div class="col-md-5">
-                  <div class="p-2 rounded border" style="font-size:.82rem">
-                    <div class="text-muted mb-1">Comisión plataforma</div>
-                    <div class="fw-bold text-primary fs-5">5% fijo</div>
-                    <div class="text-muted" style="font-size:.72rem">Aplica a todos los proveedores por igual</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <!-- Botón guardar -->
             <div class="alert alert-success small" v-if="paymentMethodsSaved">
               <i class="bi bi-check-circle me-1"></i>Métodos de pago guardados correctamente.
@@ -2240,14 +2078,9 @@
           <span class="text-muted small">({{ selectedProduct.rating_count }} reseñas)</span>
         </div>
         <div class="buy-box">
-          <!-- Precio tachado — rojo pequeño -->
-          <div v-if="selectedProduct.compare_price" class="detail-compare-price mb-1">
-            {{ formatCLP(selectedProduct.compare_price) }}
-          </div>
-          <!-- Precio actual — grande azul -->
-          <h2 class="detail-price mb-2">{{ formatCLP(selectedProduct.price) }}</h2>
-          <!-- Badge descuento -->
-          <div v-if="selectedProduct.compare_price" class="discount-badge d-inline-block mb-3">
+          <div v-if="selectedProduct.compare_price" class="compare-price mb-1">{{ formatCLP(selectedProduct.compare_price) }}</div>
+          <div class="price mb-1">{{ formatCLP(selectedProduct.price) }}</div>
+          <div v-if="selectedProduct.compare_price" class="discount-badge d-inline-block mb-2">
             {{ Math.round((1 - selectedProduct.price/selectedProduct.compare_price)*100) }}% OFF
           </div>
           <!-- Descripción breve -->
@@ -2274,44 +2107,14 @@
           <button class="btn-add-cart" @click="addToCart(selectedProduct, detailQty)" :disabled="selectedProduct.stock === 0">
             <i class="bi bi-cart-plus me-2"></i>Agregar al carrito
           </button>
-          <button class="btn-buy-now" @click="buyNow(selectedProduct, detailQty)" :disabled="selectedProduct.stock === 0">Comprar ahora</button>
+          <button class="btn-buy-now">Comprar ahora</button>
           <div class="mt-3 pt-3 border-top">
             <small class="text-muted d-flex align-items-center gap-2 mb-1">
               <i class="bi bi-person-circle"></i>Vendido por <strong>{{ selectedProduct.seller_name }}</strong>
             </small>
-            <small class="text-muted d-flex align-items-center gap-2 mb-3">
+            <small class="text-muted d-flex align-items-center gap-2">
               <i class="bi bi-shield-check text-success"></i>Compra protegida
             </small>
-            <!-- Compartir en RRSS -->
-            <div class="pt-2">
-              <small class="text-muted fw-bold d-block mb-2"><i class="bi bi-share me-1"></i>Compartir</small>
-              <div class="d-flex gap-2 flex-wrap">
-                <a :href="'https://wa.me/?text=' + encodeURIComponent(selectedProduct.title + ' - ' + formatCLP(selectedProduct.price) + ' - ' + shareUrl)"
-                   target="_blank" class="btn btn-sm d-flex align-items-center gap-1 fw-bold"
-                   style="background:#25D366;color:white;border:none;border-radius:8px;font-size:.8rem">
-                  <i class="bi bi-whatsapp"></i> WhatsApp
-                </a>
-                <a :href="'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl)"
-                   target="_blank" class="btn btn-sm d-flex align-items-center gap-1 fw-bold"
-                   style="background:#1877F2;color:white;border:none;border-radius:8px;font-size:.8rem">
-                  <i class="bi bi-facebook"></i> Facebook
-                </a>
-                <a :href="'https://t.me/share/url?url=' + encodeURIComponent(shareUrl) + '&text=' + encodeURIComponent(selectedProduct.title)"
-                   target="_blank" class="btn btn-sm d-flex align-items-center gap-1 fw-bold"
-                   style="background:#229ED9;color:white;border:none;border-radius:8px;font-size:.8rem">
-                  <i class="bi bi-telegram"></i> Telegram
-                </a>
-                <a :href="'https://www.tiktok.com/share?url=' + encodeURIComponent(shareUrl)"
-                   target="_blank" class="btn btn-sm d-flex align-items-center gap-1 fw-bold"
-                   style="background:#000;color:white;border:none;border-radius:8px;font-size:.8rem">
-                  <i class="bi bi-tiktok"></i> TikTok
-                </a>
-                <button @click="copyShareLink" class="btn btn-sm d-flex align-items-center gap-1 fw-bold"
-                        style="background:var(--ms-blue);color:white;border:none;border-radius:8px;font-size:.8rem">
-                  <i class="bi bi-link-45deg"></i> Copiar link
-                </button>
-              </div>
-            </div>
           </div>
         </div>
         <!-- Description -->
@@ -2699,7 +2502,7 @@
                   <div class="flex-grow-1">
                     <div class="fw-bold small">Aceptar orden</div>
                     <div class="text-muted" style="font-size:.78rem">Confirmas que tienes el producto disponible</div>
-                    <div v-if="['paid','pending'].includes(selectedVendorOrder.status)" class="mt-2">
+                    <div v-if="selectedVendorOrder.status==='paid'" class="mt-2">
                       <button class="btn btn-success btn-sm fw-bold px-3" @click="vendorAcceptOrder(selectedVendorOrder.id)" :disabled="orderActionLoading">
                         <span v-if="orderActionLoading" class="spinner-border spinner-border-sm me-1"></span>
                         <i class="bi bi-check-circle me-1" v-else></i>Aceptar pedido
@@ -2938,29 +2741,21 @@
           <p class="mt-3 text-muted">Sin notificaciones</p>
         </div>
         <div v-for="n in notifications" :key="n.id"
-             class="rounded p-3 mb-2 d-flex gap-3 align-items-start"
-             :style="!n.read_at
-               ? 'cursor:pointer;background:rgba(27,79,138,0.08);border-left:4px solid #1B4F8A;transition:background .2s'
-               : 'cursor:pointer;background:white;border-left:4px solid transparent;transition:background .2s;opacity:.75'"
-             @mouseenter="$event.currentTarget.style.background=!n.read_at?'rgba(27,79,138,0.14)':'rgba(0,0,0,0.03)'"
-             @mouseleave="$event.currentTarget.style.background=!n.read_at?'rgba(27,79,138,0.08)':'white'"
+             class="bg-white rounded shadow-sm p-3 mb-2 d-flex gap-3 align-items-start"
+             :class="!n.read_at?'border-start border-primary border-3':''"
+             style="cursor:pointer"
              @click="readNotif(n)">
           <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
-               style="width:42px;height:42px"
-               :style="'background:var(--ms-'+n.color+',#1B4F8A)20'">
-            <i :class="'bi '+n.icon" :style="'font-size:1.15rem;color:var(--ms-'+n.color+',#1B4F8A)'"></i>
+               style="width:40px;height:40px"
+               :class="'bg-'+n.color+' bg-opacity-10'">
+            <i :class="'bi '+n.icon+' text-'+n.color" style="font-size:1.1rem"></i>
           </div>
           <div class="flex-grow-1">
-            <div class="small" :class="!n.read_at?'fw-bold':'text-muted'">{{n.title}}</div>
-            <div class="text-muted small mt-1">{{n.body}}</div>
-            <div class="text-muted mt-1 d-flex align-items-center gap-2" style="font-size:.72rem">
-              <i class="bi bi-clock"></i>{{formatDate(n.created_at)}}
-              <span v-if="n.entity_id" class="badge bg-primary bg-opacity-10 text-primary" style="font-size:.65rem">
-                Ver detalle →
-              </span>
-            </div>
+            <div class="fw-bold small" :class="!n.read_at?'':'text-muted'">{{n.title}}</div>
+            <div class="text-muted small">{{n.body}}</div>
+            <div class="text-muted" style="font-size:.72rem">{{formatDate(n.created_at)}}</div>
           </div>
-          <span style="font-size:1.2rem;line-height:1;flex-shrink:0" v-if="!n.read_at">👋🏻</span>
+          <div class="rounded-circle bg-primary flex-shrink-0" style="width:8px;height:8px;margin-top:6px" v-if="!n.read_at"></div>
         </div>
       </div>
     </template>
@@ -3524,11 +3319,7 @@ const app = createApp({
 
     const auth = ref({ user: null, loading: false, error: null });
     const loginForm = ref({ email: '', password: '' });
-    const registerForm = ref({
-      name: '', email: '', password: '',
-      consentTerms: false, consentPrivacy: false, consentMarketing: false
-    });
-
+    const registerForm = ref({ name: '', email: '', password: '' });
 
     const categories = ref([]);
     const products = ref({ data: [], total: 0, current_page: 1, last_page: 1, loading: false });
@@ -3608,50 +3399,27 @@ const app = createApp({
       for (let i = 0; i < pending.length; i++) {
         const img = pending[i];
         img.uploading = true;
-        img.error = false;
-
-        // Reintento automático hasta 3 veces (útil en mobile con conexión lenta)
-        let lastError = null;
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          try {
-            const fd = new FormData();
-            fd.append('image', img.file, img.file.name || `image_${i}.jpg`);
-            fd.append('sort_order', productImages.value.indexOf(img));
-            fd.append('is_primary', img.is_primary ? '1' : '0');
-            // Timeout 30s para conexiones móviles lentas
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 30000);
-            const res = await fetch(`/api/products/${productId}/images`, {
-              method: 'POST',
-              headers: { 'Authorization': `Bearer ${token}` },
-              body: fd,
-              signal: controller.signal
-            });
-            clearTimeout(timeout);
-            const data = await res.json();
-            if (!res.ok) throw data;
-            img.id      = data.id;
-            img.url     = data.url;
-            img.error   = false;
-            lastError   = null;
-            break; // éxito — salir del loop de reintentos
-          } catch (e) {
-            lastError = e;
-            if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt)); // esperar antes de reintentar
-          }
-        }
-
-        if (lastError) {
+        try {
+          const fd = new FormData();
+          fd.append('image', img.file);
+          fd.append('sort_order', productImages.value.indexOf(img));
+          fd.append('is_primary', img.is_primary ? '1' : '0');
+          const res  = await fetch(`/api/products/${productId}/images`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: fd
+          });
+          const data = await res.json();
+          if (!res.ok) throw data;
+          img.id      = data.id;
+          img.url     = data.url;
+          img.error   = false;
+        } catch (e) {
           img.error = true;
-          let msg = lastError?.error || lastError?.message || 'Error de conexión';
-          if (msg === 'Failed to fetch' || msg.includes('fetch')) {
-            msg = 'Sin conexión. Verifica tu WiFi o datos móviles e intenta de nuevo.';
-          } else if (msg.includes('abort') || lastError?.name === 'AbortError') {
-            msg = 'Tiempo agotado. Foto muy grande o conexión lenta. Intenta con otra foto.';
-          }
-          imgErrors.value.push(`Error imagen ${i + 1}: ${msg}`);
+          imgErrors.value.push(`Error al subir imagen ${i + 1}.`);
+        } finally {
+          img.uploading = false;
         }
-        img.uploading = false;
       }
       // Actualizar sort_order de todas
       await syncImageOrder(productId);
@@ -3679,20 +3447,15 @@ const app = createApp({
     function loadProductImages(product) {
       if (product.images && product.images.length) {
         productImages.value = product.images.map((img, i) => ({
-          id: img.id,
-          url: img.url,
-          // Si la URL es relativa (/uploads/...) y estamos en producción Railway → no hay archivo
-          preview: null,
-          file: null, uploading: false, error: false, loadError: false,
-          is_primary: img.is_primary || i === 0,
-          isLegacy: img.url && img.url.startsWith('/uploads/') // imagen local antigua
+          id: img.id, url: img.url, preview: null,
+          file: null, uploading: false, error: false,
+          is_primary: img.is_primary || i === 0
         }));
       } else {
         productImages.value = [];
       }
     }
     const myProducts      = ref({ data: [], total: 0 });
-    const sellerModal     = ref({ show: false, accepted: false, loading: false });
     const myProductsLoading = ref(false);
     const myProductSearch = ref('');
     const myProductStatusFilter = ref('');
@@ -3753,21 +3516,6 @@ const app = createApp({
       sellerTab.value = 'form';
     }
 
-    async function doActivateSeller() {
-      sellerModal.value.loading = true;
-      try {
-        await api('PATCH', '/profile', { role: 'seller' });
-        auth.value.user.role = 'seller';
-        sellerModal.value.show = false;
-        toast('¡Cuenta vendedor activada! Ya puedes publicar productos. 🛍️');
-        sellerTab.value = 'list';
-        await loadMyProducts(); await loadMpStatus(); await loadBankStatus();
-        currentView.value = 'my-products';
-      } catch (e) {
-        toast(e.error || 'Error al activar.', 'error');
-      } finally { sellerModal.value.loading = false; }
-    }
-
     async function loadMyProducts() {
       myProductsLoading.value = true;
       try {
@@ -3796,25 +3544,11 @@ const app = createApp({
       return errs;
     }
 
-    const BUYER_PRODUCT_LIMIT = 2;
-
     async function submitProductForm() {
       if (!checkRut()) return;
       formErrors.value = {}; imgErrors.value = [];
       const errs = validateProductForm();
       if (Object.keys(errs).length) { formErrors.value = errs; return; }
-
-      // Verificar límite de productos para buyer
-      const isNewProduct = !productForm.value.id;
-      if (isNewProduct && auth.value.user?.role === 'buyer') {
-        const activeCount = (myProducts.value.data || []).filter(p => p.status !== 'deleted').length;
-        if (activeCount >= BUYER_PRODUCT_LIMIT) {
-          sellerModal.value = { show: true, accepted: false, loading: false };
-          toast(`Como comprador puedes publicar hasta ${BUYER_PRODUCT_LIMIT} productos. Activa tu cuenta vendedor para publicar más.`, 'error');
-          return;
-        }
-      }
-
       productFormLoading.value = true;
       try {
         const body = { ...productForm.value };
@@ -3966,16 +3700,13 @@ const app = createApp({
       wallet:      { enabled: false, provider: '', account: '', instructions: '' },
       transfer:    { enabled: false, bank: '', account_type: 'cuenta_corriente', account_number: '', account_name: '' },
       custom:      { enabled: false, text: '' },
-      tax_rate:    0,
-      tax_rate_custom: 0,
     });
 
     const activePaymentMethods = computed(() => {
       const names = { mercadopago: 'Mercado Pago', wallet: 'Billetera Digital', transfer: 'Transferencia', custom: 'Personalizado' };
-      const keys  = ['mercadopago', 'wallet', 'transfer', 'custom'];
-      return keys
-        .filter(k => paymentMethods.value[k]?.enabled)
-        .map(k => names[k]);
+      return Object.entries(paymentMethods.value)
+        .filter(([, v]) => v.enabled)
+        .map(([k]) => names[k]);
     });
 
     // Construir lista de métodos del vendedor para mostrar en checkout
@@ -4023,13 +3754,7 @@ const app = createApp({
     async function savePaymentMethods() {
       profileLoading.value = true;
       try {
-        const pmData = {
-          ...paymentMethods.value,
-          tax_rate: paymentMethods.value.tax_rate === -1
-            ? (paymentMethods.value.tax_rate_custom || 0)
-            : (paymentMethods.value.tax_rate || 0),
-        };
-        await api('POST', '/vendor/payment-methods/save', pmData);
+        await api('POST', '/vendor/payment-methods/save', paymentMethods.value);
         paymentMethodsSaved.value = true;
         setTimeout(() => paymentMethodsSaved.value = false, 3000);
         toast('Métodos de pago guardados ✓');
@@ -4050,8 +3775,6 @@ const app = createApp({
             wallet:      { enabled: !!a.wallet_enabled,  provider: a.wallet_provider || '', account: a.wallet_account || '', instructions: a.wallet_instructions || '' },
             transfer:    { enabled: !!a.is_active,       bank: a.bank_name || '', account_type: a.account_type || 'cuenta_corriente', account_number: a.account_number || '', account_name: a.account_name || '' },
             custom:      { enabled: !!a.custom_enabled,  text: a.custom_text || '' },
-            tax_rate:    parseFloat(a.tax_rate ?? 0),
-            tax_rate_custom: parseFloat(a.tax_rate ?? 0),
           };
         }
       } catch {}
@@ -4379,6 +4102,11 @@ const app = createApp({
           checkoutOrderId.value         = orderRes.order_id;
           checkoutAmount.value          = orderRes.total || cart.value.total;
           checkoutOrderNumber.value     = orderRes.order_number;
+          sessionStorage.setItem('ms_pending_order', JSON.stringify({
+            id: orderRes.order_id,
+            num: orderRes.order_number,
+            total: orderRes.total || cart.value.total
+          }));
         }
 
         if (!currentOrderId) throw { error: 'No se pudo crear la orden.' };
@@ -4392,11 +4120,14 @@ const app = createApp({
             const bankRes = await api('POST', '/payments/bank-transfer/create', { order_id: currentOrderId });
             bankPayUrl.value = bankRes.payment_url;
           } catch {
-            // Sin API Khipu — mostrar datos bancarios del vendedor
-            bankPayUrl.value = null;
-            checkoutError.value = '';
-            // Mostrar instrucciones manuales
+            // Sin Khipu configurado → mostrar instrucciones manuales bancarias
+            bankPayUrl.value  = null;
             mpInitPoint.value = null;
+            checkoutError.value = '';
+            if (!selectedPayDetails.value) {
+              selectedPayDetails.value = vendorPaymentMethods.value.find(m => m.key === 'bank_transfer')
+                || vendorPaymentMethods.value[0] || null;
+            }
           }
         } else {
           // wallet o custom — mostrar instrucciones del vendedor directamente
@@ -4422,7 +4153,17 @@ const app = createApp({
       mpInitPoint.value       = '';
       checkoutAmount.value    = 0;
       bankPayUrl.value        = '';
-      checkoutOrderId.value   = null;
+      const _saved = sessionStorage.getItem('ms_pending_order');
+      if (_saved) {
+        try {
+          const _o = JSON.parse(_saved);
+          checkoutOrderId.value     = _o.id;
+          checkoutOrderNumber.value = _o.num;
+          checkoutAmount.value      = _o.total;
+        } catch { checkoutOrderId.value = null; }
+      } else {
+        checkoutOrderId.value = null;
+      }
       selectedPayMethod.value = 'mercadopago';
       selectedAddressId.value = addresses.value.find(a => a.is_default)?.id || null;
       // Detectar retorno desde MP
@@ -4555,26 +4296,7 @@ const app = createApp({
         notif.read_at = new Date().toISOString();
         unreadCount.value = Math.max(0, unreadCount.value - 1);
       }
-      if (!notif.entity_id) return;
-
-      // Navegar según tipo de entidad
-      if (notif.entity_type === 'order') {
-        // Detectar si es notificación para vendedor o comprador
-        const vendorTypes = ['order_accepted','order_dispatched','order_completed','new_message','dispute_opened'];
-        const isVendorNotif = vendorTypes.includes(notif.type);
-
-        if (isVendorNotif) {
-          // Ir a Mis Pedidos y abrir el detalle
-          navigate('vendor-orders');
-          await new Promise(r => setTimeout(r, 300));
-          await loadVendorOrderDetail(notif.entity_id);
-        } else {
-          // Ir a Mis Compras y abrir el comprobante
-          navigate('orders');
-          await new Promise(r => setTimeout(r, 300));
-          await loadOrderDetail(notif.entity_id);
-        }
-      }
+      if (notif.action_url) navigate('orders');
     }
 
     async function markAllNotifRead() {
@@ -4585,21 +4307,6 @@ const app = createApp({
     }
 
     // Comprador confirma recepción
-    function openDisputeModal(orderId) {
-      toast('Función de disputa próximamente.', 'warning');
-    }
-
-    async function buyNow(product, qty = 1) {
-      if (auth.value.user?.role === 'admin') { toast('Los administradores no pueden realizar compras.', 'error'); return; }
-      if (auth.value.user?.id && product.seller_id === auth.value.user.id) { toast('No puedes comprar tus propios productos.', 'error'); return; }
-      if (!checkRut()) return;
-      try {
-        await api('POST', '/cart/items', { product_id: product.id, quantity: qty });
-        await loadCart();
-        navigate('checkout');
-      } catch (e) { toast(e.error || 'Error al procesar.', 'error'); }
-    }
-
     async function confirmOrderReceived(orderId) {
       try {
         await api('POST', `/orders/${orderId}/confirm`);
@@ -4642,80 +4349,28 @@ const app = createApp({
       return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(v || 0);
     }
 
-    // URL para compartir producto
-    const shareUrl = Vue.computed(() => {
-      if (!selectedProduct.value?.slug) return window.location.href;
-      const base = window.location.origin;
-      return base + '/products/' + selectedProduct.value.slug;
-    });
-
-    async function copyShareLink() {
-      const url = shareUrl.value;
-      try {
-        await navigator.clipboard.writeText(url);
-        toast('🔗 Link copiado al portapapeles');
-      } catch {
-        const el = document.createElement('input');
-        el.value = url; document.body.appendChild(el);
-        el.select(); document.execCommand('copy');
-        document.body.removeChild(el);
-        toast('🔗 Link copiado');
-      }
-    }
-
     function formatDate(d) {
       return d ? new Date(d).toLocaleDateString('es-CL') : '';
     }
 
     function statusBadge(s) {
-      const map = {
-        pending:     'bg-warning text-dark',
-        paid:        'bg-info text-white',
-        processing:  'bg-primary',
-        dispatched:  'bg-primary',
-        in_transit:  'bg-info text-white',
-        delivered:   'bg-success',
-        completed:   'bg-success',
-        dispute:     'bg-danger',
-        cancelled:   'bg-secondary',
-        refunded:    'bg-warning text-dark',
-      };
-      return map[s] || 'bg-secondary';
+      return { 'bg-warning text-dark': s === 'pending', 'bg-info': s === 'paid', 'bg-primary': s === 'processing', 'bg-success': s === 'delivered', 'bg-danger': s === 'cancelled', 'bg-secondary': true }[s] || 'bg-secondary';
     }
     function statusLabel(s) {
-      const map = {
-        pending:    'Pendiente',
-        paid:       'Pago recibido',
-        processing: 'Aceptado — preparando',
-        dispatched: 'Despachado',
-        in_transit: 'En camino',
-        delivered:  'Entregado',
-        completed:  'Completado',
-        dispute:    'En disputa',
-        cancelled:  'Cancelado',
-        refunded:   'Reembolsado',
-      };
-      return map[s] || s;
+      return { pending:'Pendiente', paid:'Pagado', processing:'En proceso', shipped:'Enviado', delivered:'Entregado', cancelled:'Cancelado', refunded:'Reembolsado' }[s] || s;
     }
 
     function navigate(view) {
+      if (view === 'orders' || view === 'home') {
+        sessionStorage.removeItem('ms_pending_order');
+      }
       currentView.value = view;
       window.scrollTo(0, 0);
       if (view === 'home') loadProducts(true);
       if (view === 'products') loadProducts();
-      // Limpiar URL al salir del detalle de producto
-      if (view !== 'product-detail' && window.location.pathname.startsWith('/products/')) {
-        window.history.replaceState({}, '', '/');
-      }
       if (view === 'cart') loadCart();
       if (view === 'orders') { selectedOrder.value = null; loadOrders(); }
-      if (view === 'my-products') {
-        const token = localStorage.getItem('ms_token');
-        if (!token) { navigate('login'); return; }
-        {
-          sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus();
-        }
-      }
+      if (view === 'my-products')    { sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus(); }
       if (view === 'vendor-orders')  { selectedVendorOrder.value = null; loadVendorOrders(); }
       if (view === 'notifications')  { loadNotifications(); }
       if (view === 'profile')  { profileTab.value = 'data'; initProfileData(); loadAddresses(); loadPaymentMethods(); }
@@ -4754,9 +4409,8 @@ const app = createApp({
         const r = await api('POST', '/auth/register', registerForm.value);
         localStorage.setItem('ms_token', r.token);
         auth.value.user = r.user;
-        loadUnreadCount();
         navigate('home');
-        toast('¡Bienvenido/a a MercadoSordo! 🤟');
+        toast('¡Cuenta creada con éxito!');
       } catch (e) { auth.value.error = e.error || 'Error al registrarse.'; }
       finally { auth.value.loading = false; }
     }
@@ -4804,8 +4458,6 @@ const app = createApp({
     async function viewProduct(p) {
       currentView.value = 'product-detail';
       window.scrollTo(0, 0);
-      // Actualizar URL para que sea compartible
-      window.history.pushState({}, '', `/products/${p.slug}`);
       try {
         selectedProduct.value = await api('GET', `/products/${p.slug}`);
         activeImage.value = selectedProduct.value.images?.[0]?.url || null;
@@ -4838,14 +4490,6 @@ const app = createApp({
     }
 
     async function addToCart(product, qty = 1) {
-      // Bloquear admin
-      if (auth.value.user?.role === 'admin') {
-        toast('Los administradores no pueden realizar compras.', 'error'); return;
-      }
-      // Bloquear vendedor comprando sus propios productos
-      if (auth.value.user?.id && product.seller_id === auth.value.user.id) {
-        toast('No puedes comprar tus propios productos.', 'error'); return;
-      }
       if (!checkRut()) return;
       try {
         await api('POST', '/cart/items', { product_id: product.id, quantity: qty });
@@ -4893,10 +4537,7 @@ const app = createApp({
 
     async function loadOrderDetail(id) {
       try {
-        const r = await api('GET', `/orders/${id}`);
-        // Asegurar que tracking existe
-        if (!r.tracking) r.tracking = [];
-        selectedOrder.value = r;
+        selectedOrder.value = await api('GET', `/orders/${id}`);
       } catch { toast('Error al cargar el detalle.', 'error'); }
     }
 
@@ -4926,35 +4567,17 @@ const app = createApp({
     onMounted(async () => {
       await Promise.all([loadMe(), loadCategories(), loadProducts(true), loadCart()]);
       if (auth.value.user) loadUnreadCount();
-
-      // Detectar URL directa /products/{slug} — para links compartidos en RRSS
-      const path = window.location.pathname;
-      const slugMatch = path.match(/^\/products\/([^\/]+)$/);
-      if (slugMatch) {
-        const slug = slugMatch[1];
-        try {
-          const product = await api('GET', `/products/${slug}`);
-          if (product && product.id) {
-            selectedProduct.value = product;
-            activeImage.value = product.images?.[0]?.url || product.primary_image || null;
-            detailQty.value = 1;
-            currentView.value = 'product-detail';
-            // Actualizar URL sin recargar
-            window.history.replaceState({}, '', `/products/${slug}`);
-          }
-        } catch { navigate('home'); }
-      }
     });
 
     return {
       currentView, appLoading, isAdminRoute, adminView, adminSearch, adminOrderFilter,
       searchQuery, activeCategory, detailQty, activeImage,
-      auth, loginForm, registerForm, sellerModal,
+      auth, loginForm, registerForm,
       categories, products, filters, selectedProduct,
       cart, orders, ordersLoading,
       adminDash, adminUsers, adminProducts, adminOrders,
       toasts,
-      navigate, doLogin, doRegister, logout, doActivateSeller,
+      navigate, doLogin, doRegister, logout,
       loadProducts, viewProduct, filterByCategory, doSearch, applyFilters, resetFilters, changePage,
       addToCart, updateCartItem, removeCartItem, toggleWishlist,
       loadOrders, loadOrderDetail, selectedOrder, retryPayment, loadDashboard, loadAdminUsers, loadAdminProducts, loadAdminOrders,
@@ -4979,8 +4602,7 @@ const app = createApp({
       removeImage, setPrimaryImage, moveImage, loadProductImages,
       confirmDeleteProduct, doDeleteProduct, getCategoryName,
       updateAdminUser, updateOrderStatus,
-      formatCLP, formatDate, statusBadge, statusLabel, buyNow,
-        shareUrl, copyShareLink,
+      formatCLP, formatDate, statusBadge, statusLabel,
       vendorOrders, vendorOrdersLoading, vendorOrderFilter, selectedVendorOrder,
       vendorOrdersBadge, orderActionLoading, dispatchForm, showCancelOrder, cancelReason,
       orderMessages, chatMessage,
