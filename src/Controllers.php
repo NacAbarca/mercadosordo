@@ -571,7 +571,7 @@ class AdminController
         $revenueToday  = (float)$db->fetch("SELECT IFNULL(SUM(total),0) AS r FROM orders WHERE DATE(created_at)=CURDATE() AND status NOT IN ('cancelled','refunded')")['r'];
         $revenueWeek   = (float)$db->fetch("SELECT IFNULL(SUM(total),0) AS r FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) AND status NOT IN ('cancelled','refunded')")['r'];
         $revenueMonth  = (float)$db->fetch("SELECT IFNULL(SUM(total),0) AS r FROM orders WHERE YEAR(created_at)=YEAR(NOW()) AND MONTH(created_at)=MONTH(NOW()) AND status NOT IN ('cancelled','refunded')")['r'];
-        $revenueTotal  = (float)$db->fetch("SELECT IFNULL(SUM(total),0) AS r FROM orders WHERE status IN ('paid','processing','dispatched','completed')")['r'];
+        $revenueTotal  = (float)$db->fetch("SELECT IFNULL(SUM(total),0) AS r FROM orders WHERE status NOT IN ('cancelled','refunded')")['r'];
         $commTotal     = round($revenueTotal * 0.05, 2);
 
         // ── Órdenes por estado ────────────────────────────────────────────
@@ -642,8 +642,8 @@ class AdminController
                     IFNULL(SUM(o.total),0) AS total_spent
              FROM users u
              LEFT JOIN orders o ON o.buyer_id=u.id AND o.status NOT IN ('cancelled','refunded')
-             WHERE u.role='buyer'
-             GROUP BY u.id, u.name, u.avatar ORDER BY total_spent DESC LIMIT 6"
+             WHERE u.role IN ('buyer','seller')
+             GROUP BY u.id ORDER BY total_spent DESC LIMIT 6"
         );
 
         // ── Reputación global ─────────────────────────────────────────────

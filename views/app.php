@@ -853,7 +853,7 @@
     <!-- ─── MIS VENTAS ─── -->
     <template v-if="currentView === 'my-products'">
       <!-- Si es buyer → mostrar modal vendedor en lugar de la vista -->
-      <div v-if="auth.user?.role === 'buyer' && sellerModal.show" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+      <div v-if="auth.user?.role === 'buyer' && sellerModal.show && !appLoading" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
            style="background:rgba(10,22,40,0.82);z-index:9999;padding:16px">
         <div class="bg-white rounded-3 shadow-lg" style="max-width:460px;width:100%">
           <div class="text-center p-4" style="background:var(--ms-blue);border-radius:12px 12px 0 0">
@@ -3207,7 +3207,7 @@
                   <div class="fw-bold small text-success">{{ formatCLP(s.total_revenue) }}</div>
                   <div class="text-muted" style="font-size:.7rem">
                     <i class="bi bi-star-fill text-warning" style="font-size:.6rem"></i>
-                    {{ s.avg_rating || '—' }}
+                    {{ s.avg_rating > 0 ? s.avg_rating : '—' }}
                   </div>
                 </div>
               </div>
@@ -3248,7 +3248,7 @@
                   <div class="fw-bold small text-truncate">{{ p.title }}</div>
                   <div class="text-muted" style="font-size:.72rem">
                     <i class="bi bi-shop me-1"></i>{{ p.seller_name }}
-                    · <i class="bi bi-star-fill text-warning" style="font-size:.6rem"></i> {{ p.rating_avg || '—' }}
+                    · <i class="bi bi-star-fill text-warning" style="font-size:.6rem"></i> {{ p.rating_avg > 0 ? Number(p.rating_avg).toFixed(1) : '—' }}
                   </div>
                 </div>
                 <div class="text-end flex-shrink-0">
@@ -4712,9 +4712,8 @@ const app = createApp({
       if (view === 'my-products') {
         const token = localStorage.getItem('ms_token');
         if (!token) { navigate('login'); return; }
-        {
-          sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus();
-        }
+        sellerModal.value = { show: false, accepted: false, loading: false }; // reset modal
+        sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus();
       }
       if (view === 'vendor-orders')  { selectedVendorOrder.value = null; loadVendorOrders(); }
       if (view === 'notifications')  { loadNotifications(); }
