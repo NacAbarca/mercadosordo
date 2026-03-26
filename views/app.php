@@ -717,7 +717,7 @@
 
 
     <!-- MODAL CONSENTIMIENTO VENDEDOR — para activar rol seller -->
-    <div v-if="sellerConsentModal.show" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+    <div v-if="sellerConsentModal.show && auth.user" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
          style="background:rgba(10,22,40,0.85);z-index:9999;padding:16px">
       <div class="bg-white rounded-3 shadow-lg d-flex flex-column" style="max-width:500px;width:100%;max-height:85vh">
         <div class="text-center p-4" style="background:var(--ms-blue);border-radius:12px 12px 0 0">
@@ -3556,6 +3556,7 @@ const app = createApp({
     const legalModal         = ref({ show: false, type: '', content: '' });
     const consentModal       = ref({ show: false });
     const sellerConsentModal = ref({ show: false, accepted: false, loading: false });
+    const _skipSellerModal   = ref(false);
 
     const categories = ref([]);
     const products = ref({ data: [], total: 0, current_page: 1, last_page: 1, loading: false });
@@ -4707,11 +4708,12 @@ const app = createApp({
       if (view === 'cart') loadCart();
       if (view === 'orders') { selectedOrder.value = null; loadOrders(); }
       if (view === 'my-products') {
-        // Si es buyer, mostrar modal para activar vendedor
-        if (auth.value.user?.role === 'buyer') {
+        // Si es buyer, mostrar modal para activar vendedor (solo cuando navega manualmente)
+        if (auth.value.user && auth.value.user.role === 'buyer' && !_skipSellerModal.value) {
           sellerConsentModal.value = { show: true, accepted: false, loading: false };
           return;
         }
+        _skipSellerModal.value = false;
         sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus();
       }
       if (view === 'vendor-orders')  { selectedVendorOrder.value = null; loadVendorOrders(); }
@@ -4770,6 +4772,7 @@ const app = createApp({
         auth.value.user.role = 'seller';
         sellerConsentModal.value.show = false;
         toast('¡Cuenta vendedor activada! Ya puedes publicar productos. 🛍️');
+        _skipSellerModal.value = true;
         sellerTab.value = 'list';
         await loadMyProducts();
         await loadMpStatus();
@@ -4970,7 +4973,7 @@ const app = createApp({
     return {
       currentView, appLoading, isAdminRoute, adminView, adminSearch, adminOrderFilter,
       searchQuery, activeCategory, detailQty, activeImage,
-      auth, loginForm, registerForm, sellerConsentModal,
+      auth, loginForm, registerForm, sellerConsentModal, _skipSellerModal,
       categories, products, filters, selectedProduct,
       cart, orders, ordersLoading,
       adminDash, adminUsers, adminProducts, adminOrders,
