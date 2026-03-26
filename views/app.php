@@ -672,8 +672,8 @@
       </div>
     </template>
 
-    <!-- MODAL CONSENTIMIENTO — aparece una vez al registrarse -->
-    <div v-if="consentModal.show" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+    <!-- MODAL CONSENTIMIENTO — deshabilitado -->
+    <div v-if="false" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
          style="background:rgba(10,22,40,0.85);z-index:9999;padding:16px">
       <div class="bg-white rounded-3 shadow-lg d-flex flex-column" style="max-width:540px;width:100%;max-height:90vh">
         <!-- Header con branding -->
@@ -703,7 +703,7 @@
         <!-- Footer -->
         <div class="p-4 border-top">
           <button class="btn btn-primary fw-bold w-100 py-2" @click="acceptConsent"
-                  :disabled="!consentModal.terms || !consentModal.privacy"
+                  :disabled="!sellerConsentModal.accepted"
                   style="background:var(--ms-blue);border:none;border-radius:8px;font-size:1rem">
             <i class="bi bi-check-circle me-2"></i>Confirmar y entrar al catálogo
           </button>
@@ -3553,6 +3553,8 @@ const app = createApp({
       name: '', email: '', password: '',
       consentTerms: false, consentPrivacy: false, consentMarketing: false
     });
+    const legalModal         = ref({ show: false, type: '', content: '' });
+    const consentModal       = ref({ show: false });
     const sellerConsentModal = ref({ show: false, accepted: false, loading: false });
 
     const categories = ref([]);
@@ -4744,47 +4746,6 @@ const app = createApp({
       finally { auth.value.loading = false; }
     }
 
-    const legalTexts = {
-      terms: `
-        <h6>1. Descripción del Servicio</h6>
-        <p>MercadoSordo es una plataforma de comercio electrónico tipo marketplace para la Comunidad Sorda de Chile. Actuamos como intermediario entre compradores y vendedores.</p>
-        <h6>2. Comisión de plataforma</h6>
-        <p>MercadoSordo cobra un <strong>5% de comisión</strong> sobre cada transacción completada, igual para todos los vendedores.</p>
-        <h6>3. Protocolo de seguridad</h6>
-        <p>Todas las transacciones utilizan un sistema de confirmación en 4 pasos: orden → aceptación → despacho → confirmación de recepción.</p>
-        <h6>4. Conducta del usuario</h6>
-        <p>Está prohibido publicar productos ilegales, realizar fraudes, acosar usuarios o manipular el sistema de reputación. Los administradores no pueden realizar compras. Los vendedores no pueden comprar sus propios productos.</p>
-        <h6>5. Ley aplicable</h6>
-        <p>Ley N° 19.496 (Consumidor), Ley N° 19.628 (Privacidad), Ley N° 20.007 (Comercio Electrónico). Jurisdicción: Santiago de Chile.</p>
-        <p class="text-muted small">Versión completa disponible en la sección Legal de la plataforma.</p>
-      `,
-      privacy: `
-        <h6>1. Datos que recopilamos</h6>
-        <p>Nombre, email, RUT, teléfono, dirección, foto de perfil, historial de compras y mensajes entre usuarios.</p>
-        <h6>2. Para qué usamos tus datos</h6>
-        <p>Gestionar tu cuenta, procesar pagos, enviar notificaciones de pedidos, verificar identidad (RUT) y mejorar la plataforma.</p>
-        <h6>3. Con quién compartimos</h6>
-        <p>Solo con proveedores necesarios: Mercado Pago y Khipu (pagos), Railway (hosting), Cloudflare R2 (imágenes), Resend (emails). <strong>No vendemos tus datos.</strong></p>
-        <h6>4. Seguridad</h6>
-        <p>Contraseñas cifradas con bcrypt, tokens seguros, conexiones HTTPS, prepared statements contra SQL injection.</p>
-        <h6>5. Tus derechos (Ley 19.628)</h6>
-        <p>Tienes derecho a acceder, rectificar, cancelar u oponerte al tratamiento de tus datos. Escríbenos a admin@mercadosordo.cl.</p>
-        <h6>6. Cookies</h6>
-        <p>Usamos cookies de sesión (<code>ms_token</code>) y carrito (<code>ms_cart</code>). No usamos cookies publicitarias.</p>
-        <p class="text-muted small">Versión completa disponible en la sección Legal de la plataforma.</p>
-      `
-    };
-
-    function showLegal(type) {
-      legalModal.value = { show: true, type, content: legalTexts[type] };
-    }
-
-    function acceptLegal() {
-      if (legalModal.value.type === 'terms') registerForm.value.consentTerms = true;
-      if (legalModal.value.type === 'privacy') registerForm.value.consentPrivacy = true;
-      legalModal.value.show = false;
-    }
-
     async function doRegister() {
       auth.value.loading = true; auth.value.error = null;
       try {
@@ -4796,26 +4757,6 @@ const app = createApp({
         toast('¡Bienvenido/a a MercadoSordo! 🤟');
       } catch (e) { auth.value.error = e.error || 'Error al registrarse.'; }
       finally { auth.value.loading = false; }
-    }
-
-    async function acceptConsent() {
-      // Guardar preferencia marketing en perfil (opcional)
-      if (consentModal.value.marketing) {
-        api('PATCH', '/profile', { email_offers: true }).catch(() => {});
-      }
-      consentModal.value.show = false;
-      navigate('home');
-      toast('¡Bienvenido/a a MercadoSordo! 🤟');
-    }
-
-    function showConsentDetail(type) {
-      legalModal.value = { show: true, type, content: legalTexts[type] };
-    }
-
-    function acceptLegal() {
-      if (legalModal.value.type === 'terms') consentModal.value.terms = true;
-      if (legalModal.value.type === 'privacy') consentModal.value.privacy = true;
-      legalModal.value.show = false;
     }
 
     function openSellerConsent() {
