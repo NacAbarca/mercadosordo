@@ -473,7 +473,7 @@
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('orders')"><i class="bi bi-box me-2"></i>Mis compras</a></li>
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('my-products')"><i class="bi bi-grid me-2"></i>Mis ventas</a></li>
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('vendor-orders')"><i class="bi bi-bag-check me-2"></i>Mis pedidos <span class="badge bg-danger ms-1" v-if="vendorOrdersBadge>0">{{vendorOrdersBadge}}</span></a></li>
-              <li v-if="auth.user?.role === 'buyer'"><a class="dropdown-item fw-bold" href="#" @click.prevent="openSellerConsent" style="color:var(--ms-yellow)"><i class="bi bi-shop me-2"></i>Quiero ser vendedor</a></li>
+
               <li v-if="auth.user.role === 'admin'"><a class="dropdown-item" href="#" @click.prevent="navigate('admin')"><i class="bi bi-shield me-2"></i>Admin Panel</a></li>
               <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item text-danger" href="#" @click.prevent="logout"><i class="bi bi-box-arrow-right me-2"></i>Salir</a></li>
@@ -756,7 +756,8 @@
         <div class="d-flex justify-content-between align-items-center p-3 border-bottom">
           <h6 class="fw-bold mb-0" style="color:var(--ms-blue)">
             <i class="bi bi-shield-check me-2"></i>
-            {{ legalModal.type === 'terms' ? 'Términos y Condiciones' : 'Política de Privacidad' }}
+            <span v-if="legalModal.type === 'terms'">Términos y Condiciones</span>
+            <span v-else>Política de Privacidad</span>
           </h6>
           <button class="btn btn-sm btn-outline-secondary" @click="legalModal.show=false">
             <i class="bi bi-x-lg"></i>
@@ -4762,7 +4763,14 @@ const app = createApp({
       }
       if (view === 'cart') loadCart();
       if (view === 'orders') { selectedOrder.value = null; loadOrders(); }
-      if (view === 'my-products')    { sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus(); }
+      if (view === 'my-products') {
+        // Si es buyer, mostrar modal para activar vendedor
+        if (auth.value.user?.role === 'buyer') {
+          sellerConsentModal.value = { show: true, accepted: false, loading: false };
+          return;
+        }
+        sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus();
+      }
       if (view === 'vendor-orders')  { selectedVendorOrder.value = null; loadVendorOrders(); }
       if (view === 'notifications')  { loadNotifications(); }
       if (view === 'profile')  { profileTab.value = 'data'; initProfileData(); loadAddresses(); loadPaymentMethods(); }
@@ -4843,8 +4851,8 @@ const app = createApp({
         localStorage.setItem('ms_token', r.token);
         auth.value.user = r.user;
         loadUnreadCount();
-        // Mostrar modal consentimiento una vez al registrarse
-        consentModal.value = { show: true, terms: false, privacy: false, marketing: false };
+        navigate('home');
+        toast('¡Bienvenido/a a MercadoSordo! 🤟');
       } catch (e) { auth.value.error = e.error || 'Error al registrarse.'; }
       finally { auth.value.loading = false; }
     }
@@ -4880,7 +4888,11 @@ const app = createApp({
         auth.value.user.role = 'seller';
         sellerConsentModal.value.show = false;
         toast('¡Cuenta vendedor activada! Ya puedes publicar productos. 🛍️');
-        navigate('my-products');
+        sellerTab.value = 'list';
+        await loadMyProducts();
+        await loadMpStatus();
+        await loadBankStatus();
+        currentView.value = 'my-products';
       } catch (e) {
         toast(e.error || 'Error al activar cuenta vendedor.', 'error');
       } finally {
