@@ -473,7 +473,6 @@
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('orders')"><i class="bi bi-box me-2"></i>Mis compras</a></li>
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('my-products')"><i class="bi bi-grid me-2"></i>Mis ventas</a></li>
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('vendor-orders')"><i class="bi bi-bag-check me-2"></i>Mis pedidos <span class="badge bg-danger ms-1" v-if="vendorOrdersBadge>0">{{vendorOrdersBadge}}</span></a></li>
-
               <li v-if="auth.user.role === 'admin'"><a class="dropdown-item" href="#" @click.prevent="navigate('admin')"><i class="bi bi-shield me-2"></i>Admin Panel</a></li>
               <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item text-danger" href="#" @click.prevent="logout"><i class="bi bi-box-arrow-right me-2"></i>Salir</a></li>
@@ -671,46 +670,6 @@
         <div v-if="auth.error" class="alert alert-danger mt-3 mb-0 small">{{ auth.error }}</div>
       </div>
     </template>
-
-
-
-
-
-    <!-- MODAL VENDEDOR — aparece solo cuando buyer va a Mis ventas por primera vez -->
-    <div v-if="sellerModal.show && auth.user" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-         style="background:rgba(10,22,40,0.82);z-index:9999;padding:16px">
-      <div class="bg-white rounded-3 shadow-lg" style="max-width:460px;width:100%">
-        <div class="text-center p-4" style="background:var(--ms-blue);border-radius:12px 12px 0 0">
-          <div style="font-size:2rem">🛍️</div>
-          <div style="font-family:Sora,sans-serif;font-size:1.4rem;font-weight:800;color:white">Quiero ser Vendedor</div>
-          <div class="text-white-50 small">MercadoSordo</div>
-        </div>
-        <div class="p-4">
-          <p class="text-muted small mb-3">Para publicar productos acepta estas condiciones:</p>
-          <ul style="font-size:.88rem;line-height:1.9;color:#444;padding-left:1.2rem">
-            <li>Comisión del <strong>5%</strong> sobre cada venta completada</li>
-            <li>Despachar dentro del plazo acordado con el comprador</li>
-            <li>Solo publicar productos legales y de tu propiedad</li>
-            <li>Responder mensajes y disputas dentro de 48 horas</li>
-          </ul>
-          <div class="form-check p-3 rounded-3 mt-3" style="background:rgba(27,79,138,0.07)">
-            <input class="form-check-input" type="checkbox" id="smAcept" v-model="sellerModal.accepted">
-            <label class="form-check-label small fw-bold" for="smAcept">
-              Acepto estas condiciones y quiero activar mi cuenta vendedor
-            </label>
-          </div>
-        </div>
-        <div class="p-4 pt-0 d-flex gap-2">
-          <button class="btn btn-outline-secondary flex-fill" @click="sellerModal.show=false">Cancelar</button>
-          <button class="btn btn-primary fw-bold flex-fill" @click="doActivateSeller"
-                  :disabled="!sellerModal.accepted || sellerModal.loading"
-                  style="background:var(--ms-blue);border:none">
-            <span v-if="sellerModal.loading" class="spinner-border spinner-border-sm me-1"></span>
-            <i class="bi bi-shop me-1" v-else></i>Activar cuenta vendedor
-          </button>
-        </div>
-      </div>
-    </div>
 
     <!-- MY ORDERS -->
     <template v-if="currentView === 'orders'">
@@ -3506,11 +3465,7 @@ const app = createApp({
 
     const auth = ref({ user: null, loading: false, error: null });
     const loginForm = ref({ email: '', password: '' });
-    const registerForm = ref({
-      name: '', email: '', password: '',
-      consentTerms: false, consentPrivacy: false, consentMarketing: false
-    });
-
+    const registerForm = ref({ name: '', email: '', password: '' });
 
     const categories = ref([]);
     const products = ref({ data: [], total: 0, current_page: 1, last_page: 1, loading: false });
@@ -3674,7 +3629,6 @@ const app = createApp({
       }
     }
     const myProducts      = ref({ data: [], total: 0 });
-    const sellerModal     = ref({ show: false, accepted: false, loading: false });
     const myProductsLoading = ref(false);
     const myProductSearch = ref('');
     const myProductStatusFilter = ref('');
@@ -3733,21 +3687,6 @@ const app = createApp({
         };
       }
       sellerTab.value = 'form';
-    }
-
-    async function doActivateSeller() {
-      sellerModal.value.loading = true;
-      try {
-        await api('PATCH', '/profile', { role: 'seller' });
-        auth.value.user.role = 'seller';
-        sellerModal.value.show = false;
-        toast('¡Cuenta vendedor activada! Ya puedes publicar productos. 🛍️');
-        sellerTab.value = 'list';
-        await loadMyProducts(); await loadMpStatus(); await loadBankStatus();
-        currentView.value = 'my-products';
-      } catch (e) {
-        toast(e.error || 'Error al activar.', 'error');
-      } finally { sellerModal.value.loading = false; }
     }
 
     async function loadMyProducts() {
@@ -4677,17 +4616,7 @@ const app = createApp({
       }
       if (view === 'cart') loadCart();
       if (view === 'orders') { selectedOrder.value = null; loadOrders(); }
-      if (view === 'my-products') {
-        const role = auth.value.user?.role;
-        if (role === 'buyer') {
-          sellerModal.value = { show: true, accepted: false, loading: false };
-          return;
-        }
-        if (role === 'seller' || role === 'admin') {
-          sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus();
-        }
-        // Si no hay sesión, no hacer nada (aún cargando)
-      }
+      if (view === 'my-products')    { sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus(); }
       if (view === 'vendor-orders')  { selectedVendorOrder.value = null; loadVendorOrders(); }
       if (view === 'notifications')  { loadNotifications(); }
       if (view === 'profile')  { profileTab.value = 'data'; initProfileData(); loadAddresses(); loadPaymentMethods(); }
@@ -4726,9 +4655,8 @@ const app = createApp({
         const r = await api('POST', '/auth/register', registerForm.value);
         localStorage.setItem('ms_token', r.token);
         auth.value.user = r.user;
-        loadUnreadCount();
         navigate('home');
-        toast('¡Bienvenido/a a MercadoSordo! 🤟');
+        toast('¡Cuenta creada con éxito!');
       } catch (e) { auth.value.error = e.error || 'Error al registrarse.'; }
       finally { auth.value.loading = false; }
     }
@@ -4921,12 +4849,12 @@ const app = createApp({
     return {
       currentView, appLoading, isAdminRoute, adminView, adminSearch, adminOrderFilter,
       searchQuery, activeCategory, detailQty, activeImage,
-      auth, loginForm, registerForm, sellerModal,
+      auth, loginForm, registerForm,
       categories, products, filters, selectedProduct,
       cart, orders, ordersLoading,
       adminDash, adminUsers, adminProducts, adminOrders,
       toasts,
-      navigate, doLogin, doRegister, logout, doActivateSeller,
+      navigate, doLogin, doRegister, logout,
       loadProducts, viewProduct, filterByCategory, doSearch, applyFilters, resetFilters, changePage,
       addToCart, updateCartItem, removeCartItem, toggleWishlist,
       loadOrders, loadOrderDetail, selectedOrder, retryPayment, loadDashboard, loadAdminUsers, loadAdminProducts, loadAdminOrders,
