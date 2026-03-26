@@ -672,84 +672,41 @@
       </div>
     </template>
 
-    <!-- MODAL CONSENTIMIENTO — deshabilitado -->
-    <div v-if="false" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-         style="background:rgba(10,22,40,0.85);z-index:9999;padding:16px">
-      <div class="bg-white rounded-3 shadow-lg d-flex flex-column" style="max-width:540px;width:100%;max-height:90vh">
-        <!-- Header con branding -->
+
+
+
+
+    <!-- MODAL VENDEDOR — aparece solo cuando buyer va a Mis ventas por primera vez -->
+    <div v-if="sellerModal.show" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+         style="background:rgba(10,22,40,0.82);z-index:9999;padding:16px">
+      <div class="bg-white rounded-3 shadow-lg" style="max-width:460px;width:100%">
         <div class="text-center p-4" style="background:var(--ms-blue);border-radius:12px 12px 0 0">
-          <div style="font-family:Sora,sans-serif;font-size:1.8rem;font-weight:800;color:white">
-            Mercado<span style="color:var(--ms-yellow)">Sordo</span>
-          </div>
-          <div class="text-white-50 small mt-1">Plataforma de la Comunidad Sorda de Chile 🤟</div>
+          <div style="font-size:2rem">🛍️</div>
+          <div style="font-family:Sora,sans-serif;font-size:1.4rem;font-weight:800;color:white">Quiero ser Vendedor</div>
+          <div class="text-white-50 small">MercadoSordo</div>
         </div>
-        <!-- Body -->
-        <div class="p-4 overflow-auto flex-grow-1">
-          <h5 class="fw-bold mb-1" style="color:var(--ms-blue)">¡Bienvenido/a!</h5>
-          <p class="text-muted small mb-4">Para continuar, necesitamos tu consentimiento sobre cómo usamos tu información.</p>
-
-          <div class="d-flex flex-column gap-3">
-            <!-- Condiciones simplificadas -->
-            <div class="p-3 rounded-3" style="background:rgba(27,79,138,0.06)">
-              <div class="form-check mb-2">
-                <input class="form-check-input" type="checkbox" id="scA" v-model="sellerConsentModal.accepted">
-                <label class="form-check-label small fw-bold" for="scA">
-                  Acepto las condiciones para vendedores y los Términos y Condiciones de MercadoSordo. <span class="text-danger">*</span>
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- Footer -->
-        <div class="p-4 border-top">
-          <button class="btn btn-primary fw-bold w-100 py-2" @click="acceptConsent"
-                  :disabled="!sellerConsentModal.accepted"
-                  style="background:var(--ms-blue);border:none;border-radius:8px;font-size:1rem">
-            <i class="bi bi-check-circle me-2"></i>Confirmar y entrar al catálogo
-          </button>
-          <div class="text-center mt-2" style="font-size:.72rem;color:#999">
-            Al confirmar aceptas haber leído los documentos indicados.
-          </div>
-        </div>
-      </div>
-    </div>
-
-
-
-    <!-- MODAL CONSENTIMIENTO VENDEDOR — para activar rol seller -->
-    <div v-if="sellerConsentModal.show && auth.user" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-         style="background:rgba(10,22,40,0.85);z-index:9999;padding:16px">
-      <div class="bg-white rounded-3 shadow-lg d-flex flex-column" style="max-width:500px;width:100%;max-height:85vh">
-        <div class="text-center p-4" style="background:var(--ms-blue);border-radius:12px 12px 0 0">
-          <div style="font-family:Sora,sans-serif;font-size:1.5rem;font-weight:800;color:white">
-            🛍️ Quiero ser Vendedor
-          </div>
-          <div class="text-white-50 small mt-1">MercadoSordo</div>
-        </div>
-        <div class="p-4 overflow-auto flex-grow-1">
-          <p class="text-muted small mb-3">Para publicar productos debes aceptar las condiciones para vendedores:</p>
-          <ul style="font-size:.85rem;line-height:1.8;color:#444">
+        <div class="p-4">
+          <p class="text-muted small mb-3">Para publicar productos acepta estas condiciones:</p>
+          <ul style="font-size:.88rem;line-height:1.9;color:#444;padding-left:1.2rem">
             <li>Comisión del <strong>5%</strong> sobre cada venta completada</li>
-            <li>Despachar en el plazo acordado con el comprador</li>
+            <li>Despachar dentro del plazo acordado con el comprador</li>
             <li>Solo publicar productos legales y de tu propiedad</li>
-            <li>Configurar tu régimen tributario (IVA) en tu perfil</li>
-            <li>Responder disputas dentro de 48 horas</li>
-            <li>Aceptar el protocolo de seguridad de 4 pasos</li>
+            <li>Responder mensajes y disputas dentro de 48 horas</li>
           </ul>
-          <div class="form-check mt-3 p-3 rounded" style="background:rgba(27,79,138,0.06)">
-            <input class="form-check-input" type="checkbox" id="scV" v-model="sellerConsentModal.accepted">
-            <label class="form-check-label small fw-bold" for="scV">
-              Acepto las condiciones para vendedores y me comprometo a cumplirlas. <span class="text-danger">*</span>
+          <div class="form-check p-3 rounded-3 mt-3" style="background:rgba(27,79,138,0.07)">
+            <input class="form-check-input" type="checkbox" id="smAcept" v-model="sellerModal.accepted">
+            <label class="form-check-label small fw-bold" for="smAcept">
+              Acepto estas condiciones y quiero activar mi cuenta vendedor
             </label>
           </div>
         </div>
-        <div class="p-4 border-top d-flex gap-2">
-          <button class="btn btn-outline-secondary flex-fill" @click="sellerConsentModal.show=false">Cancelar</button>
-          <button class="btn btn-primary fw-bold flex-fill" @click="activateSeller"
-                  :disabled="!sellerConsentModal.accepted || sellerConsentModal.loading"
+        <div class="p-4 pt-0 d-flex gap-2">
+          <button class="btn btn-outline-secondary flex-fill" @click="sellerModal.show=false">Cancelar</button>
+          <button class="btn btn-primary fw-bold flex-fill" @click="doActivateSeller"
+                  :disabled="!sellerModal.accepted || sellerModal.loading"
                   style="background:var(--ms-blue);border:none">
-            <span v-if="sellerConsentModal.loading" class="spinner-border spinner-border-sm me-1"></span>
-            <i class="bi bi-shop me-1" v-else></i>Activar mi cuenta vendedor
+            <span v-if="sellerModal.loading" class="spinner-border spinner-border-sm me-1"></span>
+            <i class="bi bi-shop me-1" v-else></i>Activar cuenta vendedor
           </button>
         </div>
       </div>
@@ -3553,10 +3510,7 @@ const app = createApp({
       name: '', email: '', password: '',
       consentTerms: false, consentPrivacy: false, consentMarketing: false
     });
-    const legalModal         = ref({ show: false, type: '', content: '' });
-    const consentModal       = ref({ show: false });
-    const sellerConsentModal = ref({ show: false, accepted: false, loading: false });
-    const _skipSellerModal   = ref(false);
+
 
     const categories = ref([]);
     const products = ref({ data: [], total: 0, current_page: 1, last_page: 1, loading: false });
@@ -3720,6 +3674,7 @@ const app = createApp({
       }
     }
     const myProducts      = ref({ data: [], total: 0 });
+    const sellerModal     = ref({ show: false, accepted: false, loading: false });
     const myProductsLoading = ref(false);
     const myProductSearch = ref('');
     const myProductStatusFilter = ref('');
@@ -3778,6 +3733,21 @@ const app = createApp({
         };
       }
       sellerTab.value = 'form';
+    }
+
+    async function doActivateSeller() {
+      sellerModal.value.loading = true;
+      try {
+        await api('PATCH', '/profile', { role: 'seller' });
+        auth.value.user.role = 'seller';
+        sellerModal.value.show = false;
+        toast('¡Cuenta vendedor activada! Ya puedes publicar productos. 🛍️');
+        sellerTab.value = 'list';
+        await loadMyProducts(); await loadMpStatus(); await loadBankStatus();
+        currentView.value = 'my-products';
+      } catch (e) {
+        toast(e.error || 'Error al activar.', 'error');
+      } finally { sellerModal.value.loading = false; }
     }
 
     async function loadMyProducts() {
@@ -4708,12 +4678,10 @@ const app = createApp({
       if (view === 'cart') loadCart();
       if (view === 'orders') { selectedOrder.value = null; loadOrders(); }
       if (view === 'my-products') {
-        // Si es buyer, mostrar modal para activar vendedor (solo cuando navega manualmente)
-        if (auth.value.user && auth.value.user.role === 'buyer' && !_skipSellerModal.value) {
-          sellerConsentModal.value = { show: true, accepted: false, loading: false };
+        if (auth.value.user?.role === 'buyer') {
+          sellerModal.value = { show: true, accepted: false, loading: false };
           return;
         }
-        _skipSellerModal.value = false;
         sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus();
       }
       if (view === 'vendor-orders')  { selectedVendorOrder.value = null; loadVendorOrders(); }
@@ -4759,30 +4727,6 @@ const app = createApp({
         toast('¡Bienvenido/a a MercadoSordo! 🤟');
       } catch (e) { auth.value.error = e.error || 'Error al registrarse.'; }
       finally { auth.value.loading = false; }
-    }
-
-    function openSellerConsent() {
-      sellerConsentModal.value = { show: true, accepted: false, loading: false };
-    }
-
-    async function activateSeller() {
-      sellerConsentModal.value.loading = true;
-      try {
-        await api('PATCH', '/profile', { role: 'seller' });
-        auth.value.user.role = 'seller';
-        sellerConsentModal.value.show = false;
-        toast('¡Cuenta vendedor activada! Ya puedes publicar productos. 🛍️');
-        _skipSellerModal.value = true;
-        sellerTab.value = 'list';
-        await loadMyProducts();
-        await loadMpStatus();
-        await loadBankStatus();
-        currentView.value = 'my-products';
-      } catch (e) {
-        toast(e.error || 'Error al activar cuenta vendedor.', 'error');
-      } finally {
-        sellerConsentModal.value.loading = false;
-      }
     }
 
     async function logout() {
@@ -4973,12 +4917,12 @@ const app = createApp({
     return {
       currentView, appLoading, isAdminRoute, adminView, adminSearch, adminOrderFilter,
       searchQuery, activeCategory, detailQty, activeImage,
-      auth, loginForm, registerForm, sellerConsentModal, _skipSellerModal,
+      auth, loginForm, registerForm, sellerModal,
       categories, products, filters, selectedProduct,
       cart, orders, ordersLoading,
       adminDash, adminUsers, adminProducts, adminOrders,
       toasts,
-      navigate, doLogin, doRegister, logout, openSellerConsent, activateSeller,
+      navigate, doLogin, doRegister, logout, doActivateSeller,
       loadProducts, viewProduct, filterByCategory, doSearch, applyFilters, resetFilters, changePage,
       addToCart, updateCartItem, removeCartItem, toggleWishlist,
       loadOrders, loadOrderDetail, selectedOrder, retryPayment, loadDashboard, loadAdminUsers, loadAdminProducts, loadAdminOrders,
