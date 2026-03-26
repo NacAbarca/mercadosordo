@@ -677,7 +677,7 @@
 
 
     <!-- MODAL VENDEDOR — aparece solo cuando buyer va a Mis ventas por primera vez -->
-    <div v-if="sellerModal.show" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+    <div v-if="sellerModal.show && auth.user" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
          style="background:rgba(10,22,40,0.82);z-index:9999;padding:16px">
       <div class="bg-white rounded-3 shadow-lg" style="max-width:460px;width:100%">
         <div class="text-center p-4" style="background:var(--ms-blue);border-radius:12px 12px 0 0">
@@ -4678,11 +4678,15 @@ const app = createApp({
       if (view === 'cart') loadCart();
       if (view === 'orders') { selectedOrder.value = null; loadOrders(); }
       if (view === 'my-products') {
-        if (auth.value.user?.role === 'buyer') {
+        const role = auth.value.user?.role;
+        if (role === 'buyer') {
           sellerModal.value = { show: true, accepted: false, loading: false };
           return;
         }
-        sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus();
+        if (role === 'seller' || role === 'admin') {
+          sellerTab.value = 'list'; loadMyProducts(); loadMpStatus(); loadBankStatus();
+        }
+        // Si no hay sesión, no hacer nada (aún cargando)
       }
       if (view === 'vendor-orders')  { selectedVendorOrder.value = null; loadVendorOrders(); }
       if (view === 'notifications')  { loadNotifications(); }
