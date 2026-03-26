@@ -473,6 +473,7 @@
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('orders')"><i class="bi bi-box me-2"></i>Mis compras</a></li>
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('my-products')"><i class="bi bi-grid me-2"></i>Mis ventas</a></li>
               <li><a class="dropdown-item" href="#" @click.prevent="navigate('vendor-orders')"><i class="bi bi-bag-check me-2"></i>Mis pedidos <span class="badge bg-danger ms-1" v-if="vendorOrdersBadge>0">{{vendorOrdersBadge}}</span></a></li>
+              <li v-if="auth.user?.role === 'buyer'"><a class="dropdown-item fw-bold" href="#" @click.prevent="openSellerConsent" style="color:var(--ms-yellow)"><i class="bi bi-shop me-2"></i>Quiero ser vendedor</a></li>
               <li v-if="auth.user.role === 'admin'"><a class="dropdown-item" href="#" @click.prevent="navigate('admin')"><i class="bi bi-shield me-2"></i>Admin Panel</a></li>
               <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item text-danger" href="#" @click.prevent="logout"><i class="bi bi-box-arrow-right me-2"></i>Salir</a></li>
@@ -660,35 +661,7 @@
           <input type="email" class="form-control" v-model="registerForm.email"></div>
         <div class="mb-3"><label class="form-label fw-bold">Contraseña</label>
           <input type="password" class="form-control" v-model="registerForm.password"></div>
-
-        <!-- Consentimiento legal -->
-        <div class="mb-3 p-3 rounded" style="background:rgba(27,79,138,0.06);border:1px solid rgba(27,79,138,0.15)">
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="consent1" v-model="registerForm.consentTerms">
-            <label class="form-check-label small" for="consent1">
-              He leído y acepto los
-              <a href="#" @click.prevent="showLegal('terms')" class="fw-bold text-primary">Términos y Condiciones</a>
-              de uso de MercadoSordo. <span class="text-danger">*</span>
-            </label>
-          </div>
-          <div class="form-check mt-2">
-            <input class="form-check-input" type="checkbox" id="consent2" v-model="registerForm.consentPrivacy">
-            <label class="form-check-label small" for="consent2">
-              He leído y acepto la
-              <a href="#" @click.prevent="showLegal('privacy')" class="fw-bold text-primary">Política de Privacidad</a>
-              y autorizo el tratamiento de mis datos personales conforme a la Ley 19.628. <span class="text-danger">*</span>
-            </label>
-          </div>
-          <div class="form-check mt-2">
-            <input class="form-check-input" type="checkbox" id="consent3" v-model="registerForm.consentMarketing">
-            <label class="form-check-label small" for="consent3">
-              <span class="text-muted">(Opcional)</span> Acepto recibir ofertas, novedades y comunicaciones de MercadoSordo por email.
-            </label>
-          </div>
-        </div>
-
-        <button class="btn-primary-ms mb-3" @click="doRegister"
-                :disabled="auth.loading || !registerForm.consentTerms || !registerForm.consentPrivacy">
+        <button class="btn-primary-ms mb-3" @click="doRegister" :disabled="auth.loading">
           <span v-if="auth.loading" class="spinner-border spinner-border-sm me-2"></span>
           Registrarme
         </button>
@@ -699,25 +672,140 @@
       </div>
     </template>
 
-    <!-- MODAL LEGAL — Términos y Política -->
+    <!-- MODAL CONSENTIMIENTO — aparece una vez al registrarse -->
+    <div v-if="consentModal.show" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+         style="background:rgba(10,22,40,0.85);z-index:9999;padding:16px">
+      <div class="bg-white rounded-3 shadow-lg d-flex flex-column" style="max-width:540px;width:100%;max-height:90vh">
+        <!-- Header con branding -->
+        <div class="text-center p-4" style="background:var(--ms-blue);border-radius:12px 12px 0 0">
+          <div style="font-family:Sora,sans-serif;font-size:1.8rem;font-weight:800;color:white">
+            Mercado<span style="color:var(--ms-yellow)">Sordo</span>
+          </div>
+          <div class="text-white-50 small mt-1">Plataforma de la Comunidad Sorda de Chile 🤟</div>
+        </div>
+        <!-- Body -->
+        <div class="p-4 overflow-auto flex-grow-1">
+          <h5 class="fw-bold mb-1" style="color:var(--ms-blue)">¡Bienvenido/a!</h5>
+          <p class="text-muted small mb-4">Para continuar, necesitamos tu consentimiento sobre cómo usamos tu información.</p>
+
+          <div class="d-flex flex-column gap-3">
+            <!-- T&C -->
+            <div class="p-3 rounded-3 border" :class="consentModal.terms ? 'border-success bg-success bg-opacity-10' : 'border-light'">
+              <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                  <div class="fw-bold small">📋 Términos y Condiciones</div>
+                  <div class="text-muted" style="font-size:.78rem">Comisión 5%, protocolo de seguridad, productos permitidos, conducta del usuario.</div>
+                </div>
+                <button class="btn btn-sm btn-outline-primary flex-shrink-0" @click="showConsentDetail('terms')" style="font-size:.78rem">
+                  Leer
+                </button>
+              </div>
+              <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" id="cT" v-model="consentModal.terms">
+                <label class="form-check-label small fw-bold" for="cT">Acepto los Términos y Condiciones <span class="text-danger">*</span></label>
+              </div>
+            </div>
+
+            <!-- Privacidad -->
+            <div class="p-3 rounded-3 border" :class="consentModal.privacy ? 'border-success bg-success bg-opacity-10' : 'border-light'">
+              <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                  <div class="fw-bold small">🔒 Política de Privacidad</div>
+                  <div class="text-muted" style="font-size:.78rem">Qué datos guardamos, cómo los usamos y tus derechos según Ley 19.628.</div>
+                </div>
+                <button class="btn btn-sm btn-outline-primary flex-shrink-0" @click="showConsentDetail('privacy')" style="font-size:.78rem">
+                  Leer
+                </button>
+              </div>
+              <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" id="cP" v-model="consentModal.privacy">
+                <label class="form-check-label small fw-bold" for="cP">Acepto la Política de Privacidad <span class="text-danger">*</span></label>
+              </div>
+            </div>
+
+            <!-- Marketing opcional -->
+            <div class="p-3 rounded-3 border border-light">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="cM" v-model="consentModal.marketing">
+                <label class="form-check-label small" for="cM">
+                  <span class="fw-bold">📧 Comunicaciones (opcional)</span><br>
+                  <span class="text-muted" style="font-size:.78rem">Acepto recibir ofertas y novedades de MercadoSordo por email. Puedes cancelar en cualquier momento.</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Footer -->
+        <div class="p-4 border-top">
+          <button class="btn btn-primary fw-bold w-100 py-2" @click="acceptConsent"
+                  :disabled="!consentModal.terms || !consentModal.privacy"
+                  style="background:var(--ms-blue);border:none;border-radius:8px;font-size:1rem">
+            <i class="bi bi-check-circle me-2"></i>Confirmar y entrar al catálogo
+          </button>
+          <div class="text-center mt-2" style="font-size:.72rem;color:#999">
+            Al confirmar aceptas haber leído los documentos indicados.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL DETALLE LEGAL — para leer T&C o Privacidad -->
     <div v-if="legalModal.show" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-         style="background:rgba(0,0,0,0.6);z-index:9999;padding:16px" @click.self="legalModal.show=false">
-      <div class="bg-white rounded-3 shadow-lg d-flex flex-column" style="max-width:700px;width:100%;max-height:85vh">
-        <div class="d-flex justify-content-between align-items-center p-4 border-bottom">
-          <h5 class="fw-bold mb-0" style="color:var(--ms-blue)">
+         style="background:rgba(0,0,0,0.7);z-index:10000;padding:16px">
+      <div class="bg-white rounded-3 shadow-lg d-flex flex-column" style="max-width:680px;width:100%;max-height:85vh">
+        <div class="d-flex justify-content-between align-items-center p-3 border-bottom">
+          <h6 class="fw-bold mb-0" style="color:var(--ms-blue)">
             <i class="bi bi-shield-check me-2"></i>
             {{ legalModal.type === 'terms' ? 'Términos y Condiciones' : 'Política de Privacidad' }}
-          </h5>
+          </h6>
           <button class="btn btn-sm btn-outline-secondary" @click="legalModal.show=false">
             <i class="bi bi-x-lg"></i>
           </button>
         </div>
-        <div class="p-4 overflow-auto flex-grow-1" style="font-size:.88rem;line-height:1.7" v-html="legalModal.content"></div>
+        <div class="p-4 overflow-auto flex-grow-1" style="font-size:.85rem;line-height:1.7" v-html="legalModal.content"></div>
         <div class="p-3 border-top d-flex justify-content-end gap-2">
           <button class="btn btn-outline-secondary btn-sm" @click="legalModal.show=false">Cerrar</button>
-          <button class="btn btn-primary btn-sm fw-bold" @click="acceptLegal">
-            <i class="bi bi-check-circle me-1"></i>
-            Acepto
+          <button class="btn btn-success btn-sm fw-bold" @click="acceptLegal">
+            <i class="bi bi-check-circle me-1"></i>Acepto
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL CONSENTIMIENTO VENDEDOR — para activar rol seller -->
+    <div v-if="sellerConsentModal.show" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+         style="background:rgba(10,22,40,0.85);z-index:9999;padding:16px">
+      <div class="bg-white rounded-3 shadow-lg d-flex flex-column" style="max-width:500px;width:100%;max-height:85vh">
+        <div class="text-center p-4" style="background:var(--ms-blue);border-radius:12px 12px 0 0">
+          <div style="font-family:Sora,sans-serif;font-size:1.5rem;font-weight:800;color:white">
+            🛍️ Quiero ser Vendedor
+          </div>
+          <div class="text-white-50 small mt-1">MercadoSordo</div>
+        </div>
+        <div class="p-4 overflow-auto flex-grow-1">
+          <p class="text-muted small mb-3">Para publicar productos debes aceptar las condiciones para vendedores:</p>
+          <ul style="font-size:.85rem;line-height:1.8;color:#444">
+            <li>Comisión del <strong>5%</strong> sobre cada venta completada</li>
+            <li>Despachar en el plazo acordado con el comprador</li>
+            <li>Solo publicar productos legales y de tu propiedad</li>
+            <li>Configurar tu régimen tributario (IVA) en tu perfil</li>
+            <li>Responder disputas dentro de 48 horas</li>
+            <li>Aceptar el protocolo de seguridad de 4 pasos</li>
+          </ul>
+          <div class="form-check mt-3 p-3 rounded" style="background:rgba(27,79,138,0.06)">
+            <input class="form-check-input" type="checkbox" id="scV" v-model="sellerConsentModal.accepted">
+            <label class="form-check-label small fw-bold" for="scV">
+              Acepto las condiciones para vendedores y me comprometo a cumplirlas. <span class="text-danger">*</span>
+            </label>
+          </div>
+        </div>
+        <div class="p-4 border-top d-flex gap-2">
+          <button class="btn btn-outline-secondary flex-fill" @click="sellerConsentModal.show=false">Cancelar</button>
+          <button class="btn btn-primary fw-bold flex-fill" @click="activateSeller"
+                  :disabled="!sellerConsentModal.accepted || sellerConsentModal.loading"
+                  style="background:var(--ms-blue);border:none">
+            <span v-if="sellerConsentModal.loading" class="spinner-border spinner-border-sm me-1"></span>
+            <i class="bi bi-shop me-1" v-else></i>Activar mi cuenta vendedor
           </button>
         </div>
       </div>
@@ -3521,7 +3609,9 @@ const app = createApp({
       name: '', email: '', password: '',
       consentTerms: false, consentPrivacy: false, consentMarketing: false
     });
-    const legalModal = ref({ show: false, type: 'terms', content: '' });
+    const legalModal        = ref({ show: false, type: 'terms', content: '' });
+    const consentModal      = ref({ show: false, terms: false, privacy: false, marketing: false });
+    const sellerConsentModal = ref({ show: false, accepted: false, loading: false });
 
     const categories = ref([]);
     const products = ref({ data: [], total: 0, current_page: 1, last_page: 1, loading: false });
@@ -4752,10 +4842,50 @@ const app = createApp({
         const r = await api('POST', '/auth/register', registerForm.value);
         localStorage.setItem('ms_token', r.token);
         auth.value.user = r.user;
-        navigate('home');
-        toast('¡Cuenta creada con éxito!');
+        loadUnreadCount();
+        // Mostrar modal consentimiento una vez al registrarse
+        consentModal.value = { show: true, terms: false, privacy: false, marketing: false };
       } catch (e) { auth.value.error = e.error || 'Error al registrarse.'; }
       finally { auth.value.loading = false; }
+    }
+
+    async function acceptConsent() {
+      // Guardar preferencia marketing en perfil (opcional)
+      if (consentModal.value.marketing) {
+        api('PATCH', '/profile', { email_offers: true }).catch(() => {});
+      }
+      consentModal.value.show = false;
+      navigate('home');
+      toast('¡Bienvenido/a a MercadoSordo! 🤟');
+    }
+
+    function showConsentDetail(type) {
+      legalModal.value = { show: true, type, content: legalTexts[type] };
+    }
+
+    function acceptLegal() {
+      if (legalModal.value.type === 'terms') consentModal.value.terms = true;
+      if (legalModal.value.type === 'privacy') consentModal.value.privacy = true;
+      legalModal.value.show = false;
+    }
+
+    function openSellerConsent() {
+      sellerConsentModal.value = { show: true, accepted: false, loading: false };
+    }
+
+    async function activateSeller() {
+      sellerConsentModal.value.loading = true;
+      try {
+        await api('PATCH', '/profile', { role: 'seller' });
+        auth.value.user.role = 'seller';
+        sellerConsentModal.value.show = false;
+        toast('¡Cuenta vendedor activada! Ya puedes publicar productos. 🛍️');
+        navigate('my-products');
+      } catch (e) {
+        toast(e.error || 'Error al activar cuenta vendedor.', 'error');
+      } finally {
+        sellerConsentModal.value.loading = false;
+      }
     }
 
     async function logout() {
@@ -4946,12 +5076,12 @@ const app = createApp({
     return {
       currentView, appLoading, isAdminRoute, adminView, adminSearch, adminOrderFilter,
       searchQuery, activeCategory, detailQty, activeImage,
-      auth, loginForm, registerForm, legalModal, showLegal, acceptLegal,
+      auth, loginForm, registerForm, legalModal, consentModal, sellerConsentModal,
       categories, products, filters, selectedProduct,
       cart, orders, ordersLoading,
       adminDash, adminUsers, adminProducts, adminOrders,
       toasts,
-      navigate, doLogin, doRegister, logout,
+      navigate, doLogin, doRegister, logout, acceptConsent, showConsentDetail, acceptLegal, openSellerConsent, activateSeller,
       loadProducts, viewProduct, filterByCategory, doSearch, applyFilters, resetFilters, changePage,
       addToCart, updateCartItem, removeCartItem, toggleWishlist,
       loadOrders, loadOrderDetail, selectedOrder, retryPayment, loadDashboard, loadAdminUsers, loadAdminProducts, loadAdminOrders,
