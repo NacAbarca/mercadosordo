@@ -311,6 +311,19 @@ class CartController
         if ($userId) {
             $cart = $db->fetch("SELECT * FROM carts WHERE user_id=? AND expires_at > NOW()", [$userId]);
             if (!$cart) {
+                // Buscar carrito guest y vincularlo
+                $sessionKey = $_COOKIE['ms_cart'] ?? null;
+                if ($sessionKey) {
+                    $guestCart = $db->fetch("SELECT * FROM carts WHERE session_key=? AND expires_at > NOW()", [$sessionKey]);
+                    if ($guestCart) {
+                        $db->update('carts', [
+                            'user_id'    => $userId,
+                            'expires_at' => date('Y-m-d H:i:s', time() + 86400 * 30),
+                        ], 'id=?', [$guestCart['id']]);
+                        return $db->fetch("SELECT * FROM carts WHERE id=?", [$guestCart['id']]);
+                    }
+                }
+                // Crear carrito nuevo para el usuario
                 $key = bin2hex(random_bytes(16));
                 $id  = $db->insert('carts', ['session_key' => $key, 'user_id' => $userId, 'expires_at' => date('Y-m-d H:i:s', time() + 86400 * 30)]);
                 $cart = $db->fetch("SELECT * FROM carts WHERE id=?", [$id]);
@@ -428,6 +441,22 @@ class OrderController
 
         // Buscar carrito por user_id primero
         $cart = $db->fetch("SELECT * FROM carts WHERE user_id=? AND expires_at > NOW()", [Auth::id()]);
+
+        // Si el carrito de usuario existe pero está vacío, buscar carrito guest y migrar items
+        if ($cart) {
+            $cartItemCount = $db->fetch("SELECT COUNT(*) AS c FROM cart_items WHERE cart_id=?", [$cart['id']])['c'];
+            if ((int)$cartItemCount === 0) {
+                $sessionKey = $_COOKIE['ms_cart'] ?? null;
+                if ($sessionKey) {
+                    $guestCart = $db->fetch("SELECT * FROM carts WHERE session_key=? AND user_id IS NULL AND expires_at > NOW()", [$sessionKey]);
+                    if ($guestCart) {
+                        // Migrar items del carrito guest al carrito del usuario
+                        $db->query("UPDATE cart_items SET cart_id=? WHERE cart_id=?", [$cart['id'], $guestCart['id']]);
+                        $db->query("DELETE FROM carts WHERE id=?", [$guestCart['id']]);
+                    }
+                }
+            }
+        }
 
         // Si no hay carrito por user_id, buscar por session_key (cookie) y vincular al usuario
         if (!$cart) {
