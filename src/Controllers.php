@@ -1966,13 +1966,26 @@ class OrderManagementController
         $db    = DB::getInstance();
         $page  = (int)$req->input('page', 1);
         $unread = $req->input('unread');
-        $sql   = "SELECT * FROM notifications WHERE user_id=?";
-        $b     = [Auth::id()];
-        if ($unread) { $sql .= " AND read_at IS NULL"; }
-        $sql .= " ORDER BY created_at DESC";
-        $result = $db->paginate($sql, $b, $page, 20);
-        $result['unread_count'] = (int)$db->fetch("SELECT COUNT(*) AS c FROM notifications WHERE user_id=? AND read_at IS NULL", [Auth::id()])['c'];
-        Response::json($result);
+        $perPage = 20;
+        $userId = Auth::id();
+
+        $where = "WHERE user_id=?";
+        $b     = [$userId];
+        if ($unread) { $where .= " AND read_at IS NULL"; }
+
+        $total  = (int)$db->fetch("SELECT COUNT(*) AS c FROM notifications {$where}", $b)['c'];
+        $offset = ($page - 1) * $perPage;
+        $rows   = $db->fetchAll("SELECT * FROM notifications {$where} ORDER BY created_at DESC LIMIT {$perPage} OFFSET {$offset}", $b);
+        $unread_count = (int)$db->fetch("SELECT COUNT(*) AS c FROM notifications WHERE user_id=? AND read_at IS NULL", [$userId])['c'];
+
+        Response::json([
+            'data'         => $rows,
+            'total'        => $total,
+            'per_page'     => $perPage,
+            'current_page' => $page,
+            'last_page'    => (int)ceil($total / $perPage),
+            'unread_count' => $unread_count,
+        ]);
     }
 
     public function markNotificationRead(Request $req): void
