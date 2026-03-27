@@ -489,7 +489,12 @@
         <a href="#" @click.prevent="navigate('notifications')" style="position:relative" v-if="auth.user">
           <i class="bi bi-bell"></i>
           <span>Avisos</span>
-          <span class="cart-badge" v-if="unreadCount>0" style="background:#e53935">{{unreadCount>9?'9+':unreadCount}}</span>
+          <span v-if="unreadCount>0"
+                style="position:absolute;top:-4px;right:-4px;background:#e53935;color:white;
+                       font-size:.6rem;font-weight:800;border-radius:50%;width:18px;height:18px;
+                       display:flex;align-items:center;justify-content:center;z-index:10">
+            {{unreadCount>9?'9+':unreadCount}}
+          </span>
         </a>
         <a href="#" @click.prevent="navigate('cart')" style="position:relative">
           <i class="bi bi-cart3"></i>
@@ -4925,6 +4930,11 @@ const app = createApp({
     onMounted(async () => {
       await Promise.all([loadMe(), loadCategories(), loadProducts(true), loadCart()]);
       if (auth.value.user) loadUnreadCount();
+
+      // Polling cada 30s para refrescar badge notificaciones
+      setInterval(() => {
+        if (auth.value.user) loadUnreadCount();
+      }, 30000);
 
       // Detectar URL directa /products/{slug} — para links compartidos en RRSS
       const path = window.location.pathname;
