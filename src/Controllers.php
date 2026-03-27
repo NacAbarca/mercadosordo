@@ -4,6 +4,25 @@ namespace MercadoSordo\Controllers;
 
 use MercadoSordo\Core\{DB, Auth, Response, Request};
 
+// ── Trait compartido para notificaciones ──────────────────────────────────
+trait NotifyTrait
+{
+    private function notify(DB $db, int $userId, string $type, string $title, string $body, string $icon = 'bi-bell', string $color = 'primary', ?string $entityType = null, ?int $entityId = null): void
+    {
+        $db->insert('notifications', [
+            'user_id'     => $userId,
+            'type'        => $type,
+            'title'       => $title,
+            'body'        => $body,
+            'icon'        => $icon,
+            'color'       => $color,
+            'entity_type' => $entityType,
+            'entity_id'   => $entityId,
+            'action_url'  => $entityType === 'order' ? '/orders/' . $entityId : null,
+        ]);
+    }
+}
+
 // ============================================================
 // AuthController — /api/auth/*
 // ============================================================
@@ -415,6 +434,7 @@ class CartController
 // ============================================================
 class OrderController
 {
+    use NotifyTrait;
     public function index(Request $req): void
     {
         $db   = DB::getInstance();
@@ -1698,6 +1718,7 @@ class BankTransferController
 // ============================================================
 class OrderManagementController
 {
+    use NotifyTrait;
     private const IVA_RATE        = 0.19;
     private const COMMISSION_RATE = 0.05;
     private const AUTO_COMPLETE_DAYS = 7;
@@ -1722,21 +1743,6 @@ class OrderManagementController
     }
 
     // ── Crear notificación ─────────────────────────────────
-    private function notify(DB $db, int $userId, string $type, string $title, string $body, string $icon = 'bi-bell', string $color = 'primary', ?string $entityType = null, ?int $entityId = null): void
-    {
-        $db->insert('notifications', [
-            'user_id'     => $userId,
-            'type'        => $type,
-            'title'       => $title,
-            'body'        => $body,
-            'icon'        => $icon,
-            'color'       => $color,
-            'entity_type' => $entityType,
-            'entity_id'   => $entityId,
-            'action_url'  => $entityType === 'order' ? '/orders/' . $entityId : null,
-        ]);
-    }
-
     // ── VENDEDOR: mis pedidos recibidos ────────────────────
     public function vendorOrders(Request $req): void
     {
