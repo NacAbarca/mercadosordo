@@ -1963,19 +1963,27 @@ class OrderManagementController
     // ── Notificaciones ────────────────────────────────────
     public function getNotifications(Request $req): void
     {
-        $db    = DB::getInstance();
-        $page  = (int)$req->input('page', 1);
-        $unread = $req->input('unread');
+        $db      = DB::getInstance();
+        $page    = (int)$req->input('page', 1);
+        $unread  = $req->input('unread');
         $perPage = 20;
-        $userId = Auth::id();
+
+        // Obtener user_id directo desde token — evita problema con Auth::$user estático
+        $token   = $req->bearerToken() ?? ($_COOKIE['ms_token'] ?? null);
+        $tokenRow = $token ? $db->fetch(
+            "SELECT u.id FROM users u JOIN user_tokens t ON t.user_id=u.id
+             WHERE t.token=? AND t.type='auth' AND t.expires_at>NOW() AND u.status='active'",
+            [$token]
+        ) : null;
+        $userId = $tokenRow['id'] ?? Auth::id();
 
         $where = "WHERE user_id=?";
         $b     = [$userId];
         if ($unread) { $where .= " AND read_at IS NULL"; }
 
-        $total  = (int)$db->fetch("SELECT COUNT(*) AS c FROM notifications {$where}", $b)['c'];
-        $offset = ($page - 1) * $perPage;
-        $rows   = $db->fetchAll("SELECT * FROM notifications {$where} ORDER BY created_at DESC LIMIT {$perPage} OFFSET {$offset}", $b);
+        $total        = (int)$db->fetch("SELECT COUNT(*) AS c FROM notifications {$where}", $b)['c'];
+        $offset       = ($page - 1) * $perPage;
+        $rows         = $db->fetchAll("SELECT * FROM notifications {$where} ORDER BY created_at DESC LIMIT {$perPage} OFFSET {$offset}", $b);
         $unread_count = (int)$db->fetch("SELECT COUNT(*) AS c FROM notifications WHERE user_id=? AND read_at IS NULL", [$userId])['c'];
 
         Response::json([
