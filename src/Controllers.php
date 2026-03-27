@@ -439,39 +439,41 @@ class OrderController
         $data = $req->validate(['address_id' => 'required|numeric', 'payment_method' => 'required']);
         $db   = DB::getInstance();
 
-        // Buscar carrito por user_id primero
-        $cart = $db->fetch("SELECT * FROM carts WHERE user_id=? AND expires_at > NOW()", [Auth::id()]);
+        // Buscar el carrito con items — primero por user_id, luego guest
+        $userId = Auth::id();
+        $cart   = null;
 
-        // Si el carrito de usuario existe pero está vacío, buscar carrito guest y migrar items
-        if ($cart) {
-            $cartItemCount = $db->fetch("SELECT COUNT(*) AS c FROM cart_items WHERE cart_id=?", [$cart['id']])['c'];
-            if ((int)$cartItemCount === 0) {
-                $sessionKey = $_COOKIE['ms_cart'] ?? null;
-                if ($sessionKey) {
-                    $guestCart = $db->fetch("SELECT * FROM carts WHERE session_key=? AND user_id IS NULL AND expires_at > NOW()", [$sessionKey]);
-                    if ($guestCart) {
-                        // Migrar items del carrito guest al carrito del usuario
-                        $db->query("UPDATE cart_items SET cart_id=? WHERE cart_id=?", [$cart['id'], $guestCart['id']]);
-                        $db->query("DELETE FROM carts WHERE id=?", [$guestCart['id']]);
+        // 1. Carrito del usuario con items
+        $userCart = $db->fetch("SELECT * FROM carts WHERE user_id=? AND expires_at > NOW()", [$userId]);
+        if ($userCart) {
+            $itemCount = (int)$db->fetch("SELECT COUNT(*) AS c FROM cart_items WHERE cart_id=?", [$userCart['id']])['c'];
+            if ($itemCount > 0) $cart = $userCart;
+        }
+
+        // 2. Si carrito usuario vacío → buscar guest por cookie y migrar
+        if (!$cart) {
+            $sessionKey = $_COOKIE['ms_cart'] ?? null;
+            if ($sessionKey) {
+                $guestCart = $db->fetch("SELECT * FROM carts WHERE session_key=? AND expires_at > NOW()", [$sessionKey]);
+                if ($guestCart) {
+                    $guestItems = (int)$db->fetch("SELECT COUNT(*) AS c FROM cart_items WHERE cart_id=?", [$guestCart['id']])['c'];
+                    if ($guestItems > 0) {
+                        // Migrar items al carrito del usuario (o usar el guest directamente)
+                        if ($userCart) {
+                            $db->query("UPDATE cart_items SET cart_id=? WHERE cart_id=?", [$userCart['id'], $guestCart['id']]);
+                            $db->query("DELETE FROM carts WHERE id=?", [$guestCart['id']]);
+                            $cart = $userCart;
+                        } else {
+                            $db->update('carts', ['user_id' => $userId, 'expires_at' => date('Y-m-d H:i:s', time() + 86400 * 30)], 'id=?', [$guestCart['id']]);
+                            $cart = $guestCart;
+                        }
                     }
                 }
             }
         }
 
-        // Si no hay carrito por user_id, buscar por session_key (cookie) y vincular al usuario
-        if (!$cart) {
-            $sessionKey = $_COOKIE['ms_cart'] ?? null;
-            if ($sessionKey) {
-                $cart = $db->fetch("SELECT * FROM carts WHERE session_key=? AND expires_at > NOW()", [$sessionKey]);
-                if ($cart) {
-                    // Vincular al usuario autenticado
-                    $db->update('carts', [
-                        'user_id'    => Auth::id(),
-                        'expires_at' => date('Y-m-d H:i:s', time() + 86400 * 30),
-                    ], 'id=?', [$cart['id']]);
-                }
-            }
-        }
+        // 3. Último recurso — usar carrito usuario aunque esté vacío (mostrará error "carrito vacío")
+        if (!$cart) $cart = $userCart;
 
         $items = $db->fetchAll("SELECT ci.*, p.price, p.title, p.sku, p.seller_id, p.stock FROM cart_items ci JOIN products p ON p.id=ci.product_id WHERE ci.cart_id=?", [$cart['id'] ?? 0]);
         if (empty($items)) Response::json(['error' => 'Carrito vacío. Agrega productos antes de continuar.'], 422);
