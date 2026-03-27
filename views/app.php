@@ -522,7 +522,7 @@
     <i class="bi bi-arrow-right-circle-fill"></i>
   </div>
 
-  <!-- CATEGORIES   NAV -->
+  <!-- CATEGORIES NAV -->
   <nav class="cat-nav" v-if="!isAdminRoute">
     <div class="container-fluid">
       <ul>

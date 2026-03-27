@@ -231,12 +231,13 @@ class Request
                  ?? '';
         }
 
-        // Fallback: query string ?_token=xxx (para debug y casos edge)
+        // Fallback: query string ?_token=xxx
         if (empty($auth) && !empty($_GET['_token'])) {
-            return $_GET['_token'];
+            return trim($_GET['_token']);
         }
 
-        return str_starts_with($auth, 'Bearer ') ? substr($auth, 7) : null;
+        $auth = trim($auth);
+        return str_starts_with($auth, 'Bearer ') ? trim(substr($auth, 7)) : null;
     }
 
     public function ip(): string { return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0'; }
