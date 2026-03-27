@@ -530,6 +530,10 @@ class OrderController
             }
             $db->insert('order_tracking', ['order_id' => $orderId, 'status' => 'pending', 'description' => 'Orden creada, esperando pago.']);
             $db->delete('cart_items', 'cart_id=?', [$cart['id']]);
+
+            // Notificar al vendedor — nuevo pedido
+            $this->notify($db, (int)$sellerId, 'new_order', '🛍️ Nuevo pedido recibido', "Orden {$orderNumber} por $" . number_format($subtotal, 0, ',', '.') . " CLP. Tienes 24h para aceptar.", 'bi-bag-check', 'success', 'order', $orderId);
+
             $db->commit();
             // Email pedido creado → comprador
             if (\MercadoSordo\Core\Mailer::isEnabled()) {
