@@ -123,6 +123,15 @@ $router->group(['prefix' => '/api'], function (Router $r) {
     });
 });
 
+// ── Debug temporal notificaciones ─────────────────────────────────────────
+$router->get('/api/debug/notif', function() {
+    $db     = \MercadoSordo\Core\DB::getInstance();
+    $userId = \MercadoSordo\Core\Auth::id();
+    $all    = $db->fetchAll("SELECT id, user_id, title, read_at FROM notifications WHERE user_id=?", [$userId]);
+    $count  = $db->fetch("SELECT COUNT(*) AS c FROM notifications WHERE user_id=?", [$userId])['c'];
+    \MercadoSordo\Core\Response::json(['auth_id' => $userId, 'count' => (int)$count, 'rows' => $all]);
+});
+
 // ── SPA fallback ──────────────────────────────────────────────────────────
 $webView = fn() => Response::view('app');
 $router->get('/',                $webView);
