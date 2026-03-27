@@ -106,14 +106,26 @@ $router->group(['prefix' => '/api'], function (Router $r) {
         $db     = \MercadoSordo\Core\DB::getInstance();
         $userId = \MercadoSordo\Core\Auth::id();
         $user   = \MercadoSordo\Core\Auth::user();
-        $all    = $db->fetchAll("SELECT id, user_id, title, read_at FROM notifications WHERE user_id=?", [$userId ?? 0]);
-        $count  = (int)$db->fetch("SELECT COUNT(*) AS c FROM notifications WHERE user_id=?", [$userId ?? 0])['c'];
+        $bearer = $req->bearerToken() ?? '';
+
+        // Query directo con el token
+        $tokenRow = $db->fetch(
+            "SELECT u.id, u.name, u.status, t.type, t.expires_at, NOW() AS now
+             FROM users u JOIN user_tokens t ON t.user_id = u.id
+             WHERE t.token = ? AND t.type = 'auth' AND t.expires_at > NOW() AND u.status = 'active'",
+            [$bearer]
+        );
+
+        $all   = $db->fetchAll("SELECT id, user_id, title, read_at FROM notifications WHERE user_id=?", [$userId ?? 0]);
+        $count = (int)$db->fetch("SELECT COUNT(*) AS c FROM notifications WHERE user_id=?", [$userId ?? 0])['c'];
+
         \MercadoSordo\Core\Response::json([
-            'auth_id'   => $userId,
-            'auth_name' => $user['name'] ?? null,
-            'bearer'    => substr($req->bearerToken() ?? '', 0, 10) . '...',
-            'count'     => $count,
-            'rows'      => $all
+            'auth_id'    => $userId,
+            'auth_name'  => $user['name'] ?? null,
+            'bearer_len' => strlen($bearer),
+            'token_query'=> $tokenRow,
+            'count'      => $count,
+            'rows'       => $all
         ]);
     });
 

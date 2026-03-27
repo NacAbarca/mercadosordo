@@ -307,13 +307,18 @@ class Auth
     public static function getUserByToken(string $token): ?array
     {
         if (self::$user) return self::$user;
-        $row = DB::getInstance()->fetch(
-            "SELECT u.* FROM users u
-             JOIN user_tokens t ON t.user_id = u.id
-             WHERE t.token = ? AND t.type = 'auth' AND t.expires_at > NOW() AND u.status = 'active'",
-            [$token]
-        );
-        return self::$user = $row;
+        try {
+            $row = DB::getInstance()->fetch(
+                "SELECT u.* FROM users u
+                 JOIN user_tokens t ON t.user_id = u.id
+                 WHERE t.token = ? AND t.type = 'auth' AND t.expires_at > NOW() AND u.status = 'active'",
+                [$token]
+            );
+        } catch (\Throwable $e) {
+            error_log('[Auth] getUserByToken error: ' . $e->getMessage());
+            return null;
+        }
+        return self::$user = $row ?: null;
     }
 
     public static function revokeToken(string $token): void
