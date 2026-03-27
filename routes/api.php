@@ -101,6 +101,15 @@ $router->group(['prefix' => '/api'], function (Router $r) {
     $r->post('/orders/{id}/cancel',              'MercadoSordo\Controllers\OrderManagementController@cancelOrder');
     $r->post('/orders/{id}/dispute',             'MercadoSordo\Controllers\OrderManagementController@openDispute');
 
+    // ── Debug temporal notificaciones ────────────────────────────────────
+    $r->get('/debug/notif', function() {
+        $db     = \MercadoSordo\Core\DB::getInstance();
+        $userId = \MercadoSordo\Core\Auth::id();
+        $all    = $db->fetchAll("SELECT id, user_id, title, read_at FROM notifications WHERE user_id=?", [$userId]);
+        $count  = $db->fetch("SELECT COUNT(*) AS c FROM notifications WHERE user_id=?", [$userId])['c'];
+        \MercadoSordo\Core\Response::json(['auth_id' => $userId, 'count' => (int)$count, 'rows' => $all]);
+    });
+
     // ── Notificaciones ────────────────────────────────────────────────────
     $r->get('/notifications',                    'MercadoSordo\Controllers\OrderManagementController@getNotifications');
     $r->patch('/notifications/{id}/read',        'MercadoSordo\Controllers\OrderManagementController@markNotificationRead');
@@ -121,15 +130,6 @@ $router->group(['prefix' => '/api'], function (Router $r) {
         $r->get('/audit-log',            'MercadoSordo\Controllers\AdminController@auditLog');
         $r->get('/daily-report',          'MercadoSordo\Controllers\AdminController@dailyReport');
     });
-});
-
-// ── Debug temporal notificaciones ─────────────────────────────────────────
-$router->get('/api/debug/notif', function() {
-    $db     = \MercadoSordo\Core\DB::getInstance();
-    $userId = \MercadoSordo\Core\Auth::id();
-    $all    = $db->fetchAll("SELECT id, user_id, title, read_at FROM notifications WHERE user_id=?", [$userId]);
-    $count  = $db->fetch("SELECT COUNT(*) AS c FROM notifications WHERE user_id=?", [$userId])['c'];
-    \MercadoSordo\Core\Response::json(['auth_id' => $userId, 'count' => (int)$count, 'rows' => $all]);
 });
 
 // ── SPA fallback ──────────────────────────────────────────────────────────
