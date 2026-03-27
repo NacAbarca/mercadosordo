@@ -552,7 +552,7 @@ class OrderController
             $db->delete('cart_items', 'cart_id=?', [$cart['id']]);
 
             // Notificar al vendedor — nuevo pedido
-            $this->notify($db, (int)$sellerId, 'new_order', '🛍️ Nuevo pedido recibido', "Orden {$orderNumber} por $" . number_format($subtotal, 0, ',', '.') . " CLP. Tienes 24h para aceptar.", 'bi-bag-check', 'success', 'order', $orderId);
+            $this->notify($db, (int)$sellerId, 'new_order', '🛍️ Nuevo pedido recibido', "Orden {$orderNumber} por $" . number_format($subtotal, 0, ',', '.') . " CLP. Tienes 24h para aceptar.", 'bi-bag-check', 'success', 'order', (int)$orderId);
 
             $db->commit();
             // Email pedido creado → comprador
@@ -567,7 +567,8 @@ class OrderController
             Response::json(['order_id' => $orderId, 'order_number' => $orderNumber, 'total' => $subtotal], 201);
         } catch (\Throwable $e) {
             $db->rollback();
-            Response::json(['error' => 'Error al crear la orden.', 'debug' => $e->getMessage(), 'line' => $e->getLine()], 500);
+            error_log('[Checkout] ' . $e->getMessage());
+            Response::json(['error' => 'Error al crear la orden.'], 500);
         }
     }
 }
