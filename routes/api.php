@@ -102,12 +102,19 @@ $router->group(['prefix' => '/api'], function (Router $r) {
     $r->post('/orders/{id}/dispute',             'MercadoSordo\Controllers\OrderManagementController@openDispute');
 
     // ── Debug temporal notificaciones ────────────────────────────────────
-    $r->get('/debug/notif', function() {
+    $r->get('/debug/notif', function(\MercadoSordo\Core\Request $req) {
         $db     = \MercadoSordo\Core\DB::getInstance();
         $userId = \MercadoSordo\Core\Auth::id();
-        $all    = $db->fetchAll("SELECT id, user_id, title, read_at FROM notifications WHERE user_id=?", [$userId]);
-        $count  = $db->fetch("SELECT COUNT(*) AS c FROM notifications WHERE user_id=?", [$userId])['c'];
-        \MercadoSordo\Core\Response::json(['auth_id' => $userId, 'count' => (int)$count, 'rows' => $all]);
+        $user   = \MercadoSordo\Core\Auth::user();
+        $all    = $db->fetchAll("SELECT id, user_id, title, read_at FROM notifications WHERE user_id=?", [$userId ?? 0]);
+        $count  = (int)$db->fetch("SELECT COUNT(*) AS c FROM notifications WHERE user_id=?", [$userId ?? 0])['c'];
+        \MercadoSordo\Core\Response::json([
+            'auth_id'   => $userId,
+            'auth_name' => $user['name'] ?? null,
+            'bearer'    => substr($req->bearerToken() ?? '', 0, 10) . '...',
+            'count'     => $count,
+            'rows'      => $all
+        ]);
     });
 
     // ── Notificaciones ────────────────────────────────────────────────────

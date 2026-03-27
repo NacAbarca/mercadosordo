@@ -216,11 +216,26 @@ class Request
     public function param(string $key): ?string         { return $this->routeParams[$key] ?? null; }
     public function bearerToken(): ?string
     {
-        // PHP built-in server y Apache mod_rewrite workarounds
+        // Buscar en todos los headers posibles (Railway CDN workaround)
         $auth = $_SERVER['HTTP_AUTHORIZATION']
              ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
-             ?? (function_exists('getallheaders') ? (getallheaders()['Authorization'] ?? '') : '')
+             ?? $_SERVER['HTTP_X_AUTHORIZATION']
              ?? '';
+
+        // Fallback: getallheaders() para Apache/nginx
+        if (empty($auth) && function_exists('getallheaders')) {
+            $headers = getallheaders();
+            $auth = $headers['Authorization']
+                 ?? $headers['authorization']
+                 ?? $headers['HTTP_AUTHORIZATION']
+                 ?? '';
+        }
+
+        // Fallback: query string ?_token=xxx (para debug y casos edge)
+        if (empty($auth) && !empty($_GET['_token'])) {
+            return $_GET['_token'];
+        }
+
         return str_starts_with($auth, 'Bearer ') ? substr($auth, 7) : null;
     }
 
@@ -334,6 +349,7 @@ class AuthMiddleware implements MiddlewareInterface
             $request->isJson()
                 ? Response::json(['error' => 'Unauthorized'], 401)
                 : Response::redirect('/login');
+            return; // ← CRÍTICO: detener ejecución
         }
         $next();
     }
