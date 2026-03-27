@@ -16,3 +16,4 @@ public/uploads/products/*
 .vscode/
 .idea/
 *.swp
+database/
