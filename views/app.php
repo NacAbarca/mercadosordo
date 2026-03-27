@@ -4565,8 +4565,10 @@ const app = createApp({
       // Navegar según tipo de entidad
       if (notif.entity_type === 'order') {
         // Detectar si es notificación para vendedor o comprador
-        const vendorTypes = ['order_accepted','order_dispatched','order_completed','new_message','dispute_opened'];
-        const isVendorNotif = vendorTypes.includes(notif.type);
+        const vendorTypes = ['new_order', 'order_completed', 'payment_received', 'dispute_opened', 'new_message_seller'];
+        const buyerTypes  = ['order_accepted', 'order_dispatched', 'new_message'];
+        const isVendorNotif = vendorTypes.includes(notif.type) || 
+                              (auth.value.user?.role === 'seller' && !buyerTypes.includes(notif.type));
 
         if (isVendorNotif) {
           // Ir a Mis Pedidos y abrir el detalle
