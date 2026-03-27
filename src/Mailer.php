@@ -84,12 +84,18 @@ class Mailer
     {
         if (!self::isEnabled()) return false;
 
+        // Capturar cualquier output accidental para no romper headers JSON
+        $prevLevel = ob_get_level();
+        ob_start();
         try {
             $boundary = 'ms_' . md5(uniqid());
             $headers  = $this->buildHeaders($to, $toName, $subject, $boundary);
             $body     = $this->buildBody($htmlBody, $textBody ?: strip_tags($htmlBody), $boundary);
-            return $this->sendViaSMTP($to, $subject, $headers, $body);
+            $result   = $this->sendViaSMTP($to, $subject, $headers, $body);
+            ob_end_clean();
+            return $result;
         } catch (\Throwable $e) {
+            while (ob_get_level() > $prevLevel) ob_end_clean();
             error_log('[Mailer] Error: ' . $e->getMessage());
             return false;
         }
@@ -133,20 +139,20 @@ class Mailer
             ],
         ]);
 
-        // SSL directo (puerto 465) o STARTTLS (587/25)
+        // SSL directo (puerto 465) o STARTTLS (587/25) — timeout 5s máximo
         if ($this->secure === 'ssl') {
             $socket = stream_socket_client(
-                "ssl://{$this->host}:{$this->port}", $errno, $errstr, 30,
+                "ssl://{$this->host}:{$this->port}", $errno, $errstr, 5,
                 STREAM_CLIENT_CONNECT, $context
             );
         } else {
             $socket = stream_socket_client(
-                "tcp://{$this->host}:{$this->port}", $errno, $errstr, 30
+                "tcp://{$this->host}:{$this->port}", $errno, $errstr, 5
             );
         }
 
         if (!$socket) throw new \RuntimeException("SMTP connect failed: {$errstr} ({$errno})");
-        stream_set_timeout($socket, 30);
+        stream_set_timeout($socket, 5);
 
         $this->expect($socket, 220);
         $this->cmd($socket, "EHLO " . gethostname());

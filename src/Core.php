@@ -251,6 +251,8 @@ class Response
 {
     public static function json(mixed $data, int $status = 200): void
     {
+        // Limpiar cualquier output/warning previo que rompa los headers
+        if (ob_get_level()) ob_end_clean();
         http_response_code($status);
         header('Content-Type: application/json; charset=utf-8');
         header('X-Content-Type-Options: nosniff');
