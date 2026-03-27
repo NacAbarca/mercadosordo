@@ -567,7 +567,7 @@ class OrderController
             Response::json(['order_id' => $orderId, 'order_number' => $orderNumber, 'total' => $subtotal], 201);
         } catch (\Throwable $e) {
             $db->rollback();
-            Response::json(['error' => 'Error al crear la orden.'], 500);
+            Response::json(['error' => 'Error al crear la orden.', 'debug' => $e->getMessage(), 'line' => $e->getLine()], 500);
         }
     }
 }
