@@ -193,7 +193,7 @@
     .hero-banner::after {
       content: '';
       position: absolute; right: 0; top: 0; bottom: 0; width: 45%;
-      background: url('/public/uploads/hero-products.png') center/contain no-repeat;
+      background: url('https://pub-98859237a9804b04b5789f89647bf992.r2.dev/products/hero-productos.png') center/contain no-repeat;
     }
 
     /* ─── PRODUCT CARD ─── */
@@ -522,7 +522,7 @@
     <i class="bi bi-arrow-right-circle-fill"></i>
   </div>
 
-  <!-- CATEGORIES  NAV -->
+  <!-- CATEGORIES NAV -->
   <nav class="cat-nav" v-if="!isAdminRoute">
     <div class="container-fluid">
       <ul>
@@ -4496,6 +4496,8 @@ const app = createApp({
       try {
         await api('POST', `/vendor/orders/${id}/accept`);
         await loadVendorOrderDetail(id);
+        await loadVendorOrders();
+        loadUnreadCount();
         toast('✅ Orden aceptada. Comprador notificado.');
       } catch (e) { toast(e.error || 'Error.', 'error'); }
       finally { orderActionLoading.value = false; }
@@ -4506,6 +4508,8 @@ const app = createApp({
       try {
         await api('POST', `/vendor/orders/${id}/dispatch`, dispatchForm.value);
         await loadVendorOrderDetail(id);
+        await loadVendorOrders();
+        loadUnreadCount();
         toast('🚚 Despacho confirmado. Comprador notificado.');
         dispatchForm.value = { carrier: 'Correos de Chile', tracking: '' };
       } catch (e) { toast(e.error || 'Error.', 'error'); }
@@ -4612,6 +4616,8 @@ const app = createApp({
         await api('POST', `/orders/${orderId}/confirm`);
         toast('✅ Recepción confirmada. Fondos liberados al vendedor.');
         await loadOrders();
+        await loadOrderDetail(orderId);
+        loadUnreadCount();
       } catch (e) { toast(e.error || 'Error.', 'error'); }
     }
 
@@ -4933,10 +4939,10 @@ const app = createApp({
       await Promise.all([loadMe(), loadCategories(), loadProducts(true), loadCart()]);
       if (auth.value.user) loadUnreadCount();
 
-      // Polling cada 30s para refrescar badge notificaciones
+      // Polling cada 15s para refrescar badge notificaciones
       setInterval(() => {
         if (auth.value.user) loadUnreadCount();
-      }, 30000);
+      }, 15000);
 
       // Detectar URL directa /products/{slug} — para links compartidos en RRSS
       const path = window.location.pathname;
