@@ -193,7 +193,10 @@
     .hero-banner::after {
       content: '';
       position: absolute; right: 0; top: 0; bottom: 0; width: 45%;
-      background: url('https://pub-98859237a9804b04b5789f89647bf992.r2.dev/products/hero-productos.png') center/contain no-repeat;
+      background: url('https://pub-98859237a9804b04b5789f89647bf992.r2.dev/products/hero-products.png') center/contain no-repeat;
+    }
+    @media (max-width: 576px) {
+      .hero-banner::after { display: none; }
     }
 
     /* ─── PRODUCT CARD ─── */
