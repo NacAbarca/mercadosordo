@@ -282,7 +282,7 @@ class ProductController
         $db = DB::getInstance();
         $p  = $db->fetch("SELECT seller_id FROM products WHERE id=?", [$id]);
         if (!$p) Response::json(['error' => 'Not found'], 404);
-        if ($p['seller_id'] !== Auth::id() && !Auth::is('admin')) Response::json(['error' => 'Forbidden'], 403);
+        if ((int)$p['seller_id'] !== (int)Auth::id() && !Auth::is('admin')) Response::json(['error' => 'Forbidden'], 403);
         $db->update('products', ['status' => 'deleted'], 'id=?', [$id]);
         Response::json(['message' => 'Producto eliminado.']);
     }
@@ -1062,7 +1062,8 @@ class ProfileController
         $processedPath = $this->compressImage($file['tmp_name'], $mimeType, 400, 85);
         $mimeType      = 'image/jpeg';
         $ext           = 'jpg';
-        $filename      = 'avatars/avatar_' . Auth::id() . '_' . time() . '.' . $ext;
+        $ts            = time();
+        $filename      = 'avatars/avatar_' . Auth::id() . '_' . $ts . '.' . $ext;
         $current       = $db->fetch("SELECT avatar FROM users WHERE id=?", [Auth::id()]);
 
         if (\MercadoSordo\Core\R2Uploader::isEnabled()) {
@@ -1082,15 +1083,18 @@ class ProfileController
                 ? BASE_PATH . '/public/uploads/avatars'
                 : __DIR__ . '/../public/uploads/avatars';
             if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-            $localFile = $uploadDir . '/avatar_' . Auth::id() . '_' . time() . '.' . $ext;
+            $localFile = $uploadDir . '/avatar_' . Auth::id() . '_' . $ts . '.' . $ext;
             if (!empty($current['avatar']) && !str_contains($current['avatar'], 'r2.dev')) {
                 $old = defined('BASE_PATH') ? BASE_PATH . '/public' . $current['avatar'] : __DIR__ . '/../public' . $current['avatar'];
                 if (file_exists($old)) @unlink($old);
             }
-            if (!move_uploaded_file($file['tmp_name'], $localFile)) {
+            $moved = ($processedPath === $file['tmp_name'])
+                ? move_uploaded_file($file['tmp_name'], $localFile)
+                : rename($processedPath, $localFile);
+            if (!$moved) {
                 Response::json(['error' => 'Error al guardar la imagen.'], 500);
             }
-            $avatarUrl = '/uploads/avatars/avatar_' . Auth::id() . '_' . time() . '.' . $ext;
+            $avatarUrl = '/uploads/avatars/avatar_' . Auth::id() . '_' . $ts . '.' . $ext;
         }
 
         $db->update('users', ['avatar' => $avatarUrl], 'id=?', [Auth::id()]);
@@ -1581,8 +1585,7 @@ class BankTransferController
             'vendor_id'           => Auth::id(),
             'mp_enabled'          => !empty($data['mercadopago']['enabled']) ? 1 : 0,
             'mp_link'             => $data['mercadopago']['link'] ?? null,
-            'is_active'           => 1,
-            'account_rut'         => $user['rut'] ?? '',
+            'account_rut'         => $user['rut'] ?? null,
             'bank_name'           => $data['transfer']['bank'] ?? ($existing['bank_name'] ?? ''),
             'account_type'        => $data['transfer']['account_type'] ?? ($existing['account_type'] ?? 'cuenta_corriente'),
             'account_number'      => $data['transfer']['account_number'] ?? ($existing['account_number'] ?? ''),
