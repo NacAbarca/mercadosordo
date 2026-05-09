@@ -42,7 +42,7 @@ if (file_exists($envFile)) {
 }
 
 // Activar errores en desarrollo para facilitar debug
-$debug = filter_var(env('APP_DEBUG', 'true'), FILTER_VALIDATE_BOOLEAN);
+$debug = filter_var(env('APP_DEBUG', 'false'), FILTER_VALIDATE_BOOLEAN);
 if ($debug) {
     ini_set('display_errors', '1');
     ini_set('display_startup_errors', '1');
@@ -63,7 +63,9 @@ $origin = env('CORS_ORIGIN', '*');
 header("Access-Control-Allow-Origin: {$origin}");
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
-header('Access-Control-Allow-Credentials: true');
+if ($origin !== '*') {
+    header('Access-Control-Allow-Credentials: true');
+}
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
     exit;

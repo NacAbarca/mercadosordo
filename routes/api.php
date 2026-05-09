@@ -36,9 +36,11 @@ $router->group(['prefix' => '/api'], function (Router $r) {
     $r->delete('/cart/items/{id}', 'MercadoSordo\Controllers\CartController@removeItem');
     $r->delete('/cart',            'MercadoSordo\Controllers\CartController@clear');
 
-    // ── Webhooks — públicos (sin auth) ────────────────────────────────────
+    // ── Webhooks y callbacks públicos (sin auth) ─────────────────────────
     $r->post('/webhooks/mercadopago/ipn',      'MercadoSordo\Controllers\MercadoPagoController@webhookIPN');
     $r->post('/webhooks/bank-transfer/confirm','MercadoSordo\Controllers\BankTransferController@webhookConfirm');
+    // MP redirige aquí sin cabeceras de auth — fuera del grupo AuthMiddleware
+    $r->get('/vendor/mp/callback',             'MercadoSordo\Controllers\MercadoPagoController@oauthCallback');
 
     // ── Rutas autenticadas ────────────────────────────────────────────────
     $r->group(['middleware' => [AuthMiddleware::class]], function (Router $r) {
@@ -62,7 +64,6 @@ $router->group(['prefix' => '/api'], function (Router $r) {
         // Pagos — Mercado Pago
         $r->get('/vendor/mp/status',             'MercadoSordo\Controllers\MercadoPagoController@accountStatus');
         $r->get('/vendor/mp/authorize',          'MercadoSordo\Controllers\MercadoPagoController@authorize');
-        $r->get('/vendor/mp/callback',           'MercadoSordo\Controllers\MercadoPagoController@oauthCallback');
         $r->post('/vendor/mp/disconnect',        'MercadoSordo\Controllers\MercadoPagoController@disconnect');
         $r->post('/payments/mercadopago/create', 'MercadoSordo\Controllers\MercadoPagoController@createPreference');
 
@@ -119,8 +120,11 @@ $router->group(['prefix' => '/api'], function (Router $r) {
         $r->get('/orders',               'MercadoSordo\Controllers\AdminController@orders');
         $r->patch('/orders/{id}/status', 'MercadoSordo\Controllers\AdminController@updateOrderStatus');
         $r->get('/audit-log',            'MercadoSordo\Controllers\AdminController@auditLog');
-        $r->get('/daily-report',          'MercadoSordo\Controllers\AdminController@dailyReport');
+        $r->get('/daily-report',         'MercadoSordo\Controllers\AdminController@dailyReport');
     });
+
+    // Alias público para cron — la propia acción verifica REPORT_SECRET
+    $r->get('/report', 'MercadoSordo\Controllers\AdminController@dailyReport');
 });
 
 // ── SPA fallback ──────────────────────────────────────────────────────────

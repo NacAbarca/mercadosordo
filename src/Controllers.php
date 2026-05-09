@@ -202,6 +202,24 @@ class ProductController
             'stock'       => 'required|numeric',
         ]);
         $db   = DB::getInstance();
+
+        // Buyer limit: max 2 non-deleted products per seller (admins exempt)
+        if (!Auth::is('admin')) {
+            $existing = (int)($db->fetch("SELECT COUNT(*) AS c FROM products WHERE seller_id = ? AND status != 'deleted'", [Auth::id()])['c'] ?? 0);
+            if ($existing >= 2) Response::json(['error' => 'Solo puedes publicar hasta 2 productos.'], 422);
+        }
+
+        // Field validations
+        if ((float)$data['price'] <= 0) Response::json(['error' => 'El precio debe ser mayor a 0.'], 422);
+        if ((int)$data['stock'] < 0) Response::json(['error' => 'El stock no puede ser negativo.'], 422);
+        if (!$db->fetch("SELECT id FROM categories WHERE id = ?", [(int)$data['category_id']])) {
+            Response::json(['error' => 'Categoría no válida.'], 422);
+        }
+        $extLink = $req->input('external_link');
+        if ($extLink && !preg_match('#^https?://#i', $extLink)) {
+            Response::json(['error' => 'El enlace externo debe comenzar con http:// o https://.'], 422);
+        }
+
         $slug = $this->uniqueSlug($data['title'], $db);
 
         // Sanitizar tipos para MySQL — evita SQLSTATE 1366
@@ -249,9 +267,20 @@ class ProductController
         $raw     = $req->all();
         $allowed = ['title','description','price','compare_price','stock','stock_alert',
                     'condition_type','free_shipping','status','category_id','sku',
-                    'weight_kg','meta_desc','meta_title','featured'];
+                    'weight_kg','meta_desc','meta_title','short_desc','delivery_type','external_link'];
+        if (Auth::is('admin')) $allowed[] = 'featured';
         $data    = array_intersect_key($raw, array_flip($allowed));
         if (empty($data)) Response::json(['error' => 'Sin datos para actualizar.'], 422);
+
+        // Field validations (only for present fields)
+        if (isset($data['price']) && (float)$data['price'] <= 0) Response::json(['error' => 'El precio debe ser mayor a 0.'], 422);
+        if (isset($data['stock']) && (int)$data['stock'] < 0) Response::json(['error' => 'El stock no puede ser negativo.'], 422);
+        if (isset($data['category_id']) && !$db->fetch("SELECT id FROM categories WHERE id = ?", [(int)$data['category_id']])) {
+            Response::json(['error' => 'Categoría no válida.'], 422);
+        }
+        if (!empty($data['external_link']) && !preg_match('#^https?://#i', $data['external_link'])) {
+            Response::json(['error' => 'El enlace externo debe comenzar con http:// o https://.'], 422);
+        }
 
         // Sanitizar tipos — mismo criterio que store()
         if (isset($data['free_shipping'])) {
@@ -266,8 +295,11 @@ class ProductController
         if (isset($data['weight_kg']))     $data['weight_kg']     = ($data['weight_kg'] !== '' && (float)$data['weight_kg'] > 0) ? (float)$data['weight_kg'] : null;
         if (isset($data['featured']))      $data['featured']      = $data['featured'] ? 1 : 0;
 
-        // short_desc se guarda en meta_desc / meta_title
-        if (isset($raw['short_desc'])) {
+        // short_desc se guarda también en meta_desc / meta_title
+        if (isset($data['short_desc'])) {
+            $data['meta_desc']  = $data['short_desc'] ?: null;
+            $data['meta_title'] = $data['short_desc'] ? substr($data['short_desc'], 0, 255) : null;
+        } elseif (isset($raw['short_desc'])) {
             $data['meta_desc']  = $raw['short_desc'] ?: null;
             $data['meta_title'] = $raw['short_desc'] ? substr($raw['short_desc'], 0, 255) : null;
         }
@@ -535,7 +567,11 @@ class OrderController
                 'address_snapshot' => json_encode($addr),
             ]);
             foreach ($items as $item) {
-                if ($item['stock'] < $item['quantity']) {
+                $updated = $db->query(
+                    "UPDATE products SET stock = stock - ?, sales_count = sales_count + ? WHERE id = ? AND stock >= ? AND status = 'active'",
+                    [$item['quantity'], $item['quantity'], $item['product_id'], $item['quantity']]
+                )->rowCount();
+                if ($updated === 0) {
                     $db->rollback();
                     Response::json(['error' => "Stock insuficiente: {$item['title']}"], 400);
                 }
@@ -545,8 +581,6 @@ class OrderController
                     'sku'        => $item['sku'],         'price' => $item['price'],
                     'quantity'   => $item['quantity'],    'subtotal' => $item['price'] * $item['quantity'],
                 ]);
-                $db->query("UPDATE products SET stock=stock-?, sales_count=sales_count+? WHERE id=?",
-                    [$item['quantity'], $item['quantity'], $item['product_id']]);
             }
             $db->insert('order_tracking', ['order_id' => $orderId, 'status' => 'pending', 'description' => 'Orden creada, esperando pago.']);
             $db->delete('cart_items', 'cart_id=?', [$cart['id']]);
@@ -1268,8 +1302,11 @@ class ProductImageController
                 Response::json(['error' => 'Error al subir imagen: ' . $e->getMessage()], 500);
             }
         } else {
-            $dest = $this->uploadDir() . DIRECTORY_SEPARATOR . basename($filename);
-            if (!move_uploaded_file($processedPath, $dest)) {
+            $dest  = $this->uploadDir() . DIRECTORY_SEPARATOR . basename($filename);
+            $moved = ($processedPath === $file['tmp_name'])
+                ? move_uploaded_file($file['tmp_name'], $dest)
+                : rename($processedPath, $dest);
+            if (!$moved) {
                 Response::json(['error' => 'Error al guardar la imagen.'], 500);
             }
             $url = '/uploads/products/' . basename($filename);
@@ -1414,29 +1451,56 @@ class MercadoPagoController
 
     public function oauthCallback(Request $req): void
     {
-        $code = $req->input('code');
-        if (!$code) Response::json(['error'=>'Código OAuth no recibido.'],400);
+        $code   = $req->input('code');
+        $state  = $req->input('state');
+        $appUrl = env('APP_URL', 'http://localhost:8080');
+
+        if (!$code || !$state) {
+            header('Location: ' . $appUrl . '/profile/payments?mp_error=invalid_request');
+            exit;
+        }
+
+        $db = DB::getInstance();
+        // Recover vendor identity from the one-time state token stored during authorize()
+        $tokenRow = $db->fetch(
+            "SELECT user_id FROM user_tokens WHERE token = ? AND type = 'mp_oauth' AND expires_at > NOW()",
+            [$state]
+        );
+        if (!$tokenRow) {
+            header('Location: ' . $appUrl . '/profile/payments?mp_error=invalid_state');
+            exit;
+        }
+        $userId = (int)$tokenRow['user_id'];
+        // Consume state — one-time use
+        $db->delete('user_tokens', "token = ? AND type = 'mp_oauth'", [$state]);
+
         $cfg = $this->cfg();
-        $res = $this->curl('POST',$cfg['base_url'].'/oauth/token',[
-            'client_id'=>$cfg['client_id'],'client_secret'=>$cfg['client_secret'],
-            'code'=>$code,'redirect_uri'=>$cfg['redirect_uri'],'grant_type'=>'authorization_code',
+        $res = $this->curl('POST', $cfg['base_url'] . '/oauth/token', [
+            'client_id'     => $cfg['client_id'],
+            'client_secret' => $cfg['client_secret'],
+            'code'          => $code,
+            'redirect_uri'  => $cfg['redirect_uri'],
+            'grant_type'    => 'authorization_code',
         ]);
-        if ($res['status']!==200||empty($res['body']['access_token']))
-            Response::json(['error'=>'Error obteniendo token MP.','detail'=>$res['body']],400);
+        if ($res['status'] !== 200 || empty($res['body']['access_token'])) {
+            header('Location: ' . $appUrl . '/profile/payments?mp_error=token_exchange');
+            exit;
+        }
         $token = $res['body'];
-        $db    = DB::getInstance();
         $data  = [
-            'vendor_id'=>Auth::id(),'mp_user_id'=>$token['user_id']??'',
-            'mp_access_token'=>$token['access_token'],
-            'mp_refresh_token'=>$token['refresh_token']??null,
-            'mp_public_key'=>$token['public_key']??null,
-            'token_expires_at'=>isset($token['expires_in'])?date('Y-m-d H:i:s',time()+(int)$token['expires_in']):null,
-            'is_active'=>1,
+            'vendor_id'        => $userId,
+            'mp_user_id'       => $token['user_id'] ?? '',
+            'mp_access_token'  => $token['access_token'],
+            'mp_refresh_token' => $token['refresh_token'] ?? null,
+            'mp_public_key'    => $token['public_key'] ?? null,
+            'token_expires_at' => isset($token['expires_in']) ? date('Y-m-d H:i:s', time() + (int)$token['expires_in']) : null,
+            'is_active'        => 1,
         ];
-        $existing = $db->fetch("SELECT id FROM vendor_payment_accounts WHERE vendor_id=?",[Auth::id()]);
-        $existing ? $db->update('vendor_payment_accounts',$data,'vendor_id=?',[Auth::id()])
-                  : $db->insert('vendor_payment_accounts',$data);
-        Response::json(['message'=>'Mercado Pago conectado.']);
+        $existing = $db->fetch("SELECT id FROM vendor_payment_accounts WHERE vendor_id = ?", [$userId]);
+        $existing ? $db->update('vendor_payment_accounts', $data, 'vendor_id = ?', [$userId])
+                  : $db->insert('vendor_payment_accounts', $data);
+        header('Location: ' . $appUrl . '/profile/payments?mp_connected=1');
+        exit;
     }
 
     public function createPreference(Request $req): void
@@ -1475,23 +1539,66 @@ class MercadoPagoController
     public function webhookIPN(Request $req): void
     {
         $data  = $req->all();
-        $topic = $data['topic']??$data['type']??'';
-        $resId = $data['id']??$data['data']['id']??null;
-        if ($topic!=='payment'||!$resId){http_response_code(200);exit;}
+        $topic = $data['topic'] ?? $data['type'] ?? '';
+        $resId = $data['id'] ?? $data['data']['id'] ?? null;
+        if ($topic !== 'payment' || !$resId) { http_response_code(200); exit; }
+
         $db  = DB::getInstance();
-        $pay = $db->fetch("SELECT p.*,vpa.mp_access_token FROM payments p JOIN vendor_payment_accounts vpa ON vpa.vendor_id=p.vendor_id WHERE p.mp_preference_id IS NOT NULL ORDER BY p.created_at DESC LIMIT 1");
-        if (!$pay){http_response_code(200);exit;}
         $cfg = $this->cfg();
-        $res = $this->curl('GET',$cfg['base_url'].'/v1/payments/'.$resId,[],['Authorization: Bearer '.$pay['mp_access_token']]);
-        if ($res['status']!==200){http_response_code(200);exit;}
-        $mp = $res['body'];
-        $status = match($mp['status']??''){'approved'=>'approved','rejected'=>'rejected','cancelled'=>'cancelled',default=>'in_process'};
-        $db->update('payments',['mp_payment_id'=>(string)$resId,'status'=>$status,'status_detail'=>$mp['status_detail']??null,'payer_email'=>$mp['payer']['email']??null,'raw_response'=>json_encode($mp)],'id=?',[$pay['id']]);
-        if ($status==='approved'){
-            $db->update('orders',['status'=>'paid','payment_id'=>(string)$resId],'id=?',[$pay['order_id']]);
-            $db->insert('order_tracking',['order_id'=>$pay['order_id'],'status'=>'paid','description'=>'Pago MP confirmado. ID:'.$resId]);
+
+        // Idempotency: skip if this payment_id already approved
+        if ($db->fetch("SELECT id FROM payments WHERE mp_payment_id = ? AND status = 'approved'", [(string)$resId])) {
+            http_response_code(200); echo json_encode(['status' => 'already_processed']); exit;
         }
-        http_response_code(200);echo json_encode(['status'=>'ok']);exit;
+
+        // Use any active vendor token to query MP API
+        $vendorAcct = $db->fetch("SELECT mp_access_token FROM vendor_payment_accounts WHERE is_active = 1 LIMIT 1");
+        if (!$vendorAcct) { http_response_code(200); exit; }
+
+        $res = $this->curl('GET', $cfg['base_url'] . '/v1/payments/' . $resId, [], ['Authorization: Bearer ' . $vendorAcct['mp_access_token']]);
+        if ($res['status'] !== 200) { http_response_code(200); exit; }
+        $mp = $res['body'];
+
+        // Locate our payment via external_reference (order_number) or preference_id
+        $extRef = $mp['external_reference'] ?? null;
+        $prefId = $mp['preference_id'] ?? null;
+        $pay    = null;
+        if ($extRef) {
+            $pay = $db->fetch(
+                "SELECT p.* FROM payments p JOIN orders o ON o.id = p.order_id WHERE o.order_number = ? AND p.payment_method = 'mercadopago'",
+                [$extRef]
+            );
+        }
+        if (!$pay && $prefId) {
+            $pay = $db->fetch("SELECT * FROM payments WHERE mp_preference_id = ?", [$prefId]);
+        }
+        if (!$pay) { http_response_code(200); exit; }
+
+        $status = match ($mp['status'] ?? '') {
+            'approved'  => 'approved',
+            'rejected'  => 'rejected',
+            'cancelled' => 'cancelled',
+            default     => 'in_process',
+        };
+        $db->update('payments', [
+            'mp_payment_id' => (string)$resId,
+            'status'        => $status,
+            'status_detail' => $mp['status_detail'] ?? null,
+            'payer_email'   => $mp['payer']['email'] ?? null,
+            'raw_response'  => json_encode($mp),
+        ], 'id = ?', [$pay['id']]);
+
+        if ($status === 'approved') {
+            $immutable = ['paid', 'processing', 'dispatched', 'completed', 'cancelled', 'refunded', 'dispute'];
+            $order = $db->fetch("SELECT status FROM orders WHERE id = ?", [$pay['order_id']]);
+            if ($order && !in_array($order['status'], $immutable, true)) {
+                $db->update('orders', ['status' => 'paid', 'payment_id' => (string)$resId], 'id = ?', [$pay['order_id']]);
+                $db->insert('order_tracking', ['order_id' => $pay['order_id'], 'status' => 'paid', 'description' => 'Pago MP confirmado. ID:' . $resId]);
+            }
+        }
+        http_response_code(200);
+        echo json_encode(['status' => 'ok']);
+        exit;
     }
 
     public function disconnect(Request $req): void
@@ -1704,16 +1811,39 @@ class BankTransferController
 
     public function webhookConfirm(Request $req): void
     {
-        $data     = $req->all();
-        $khipuId  = $data['payment_id']??null;
-        if (!$khipuId){http_response_code(200);exit;}
+        $data    = $req->all();
+        $khipuId = $data['payment_id'] ?? null;
+        if (!$khipuId) { http_response_code(200); exit; }
+
         $db  = DB::getInstance();
-        $pay = $db->fetch("SELECT * FROM payments WHERE khipu_payment_id=?",[$khipuId]);
-        if (!$pay){http_response_code(200);exit;}
-        $db->update('payments',['status'=>'approved','raw_response'=>json_encode($data)],'id=?',[$pay['id']]);
-        $db->update('orders',['status'=>'paid','payment_id'=>$khipuId],'id=?',[$pay['order_id']]);
-        $db->insert('order_tracking',['order_id'=>$pay['order_id'],'status'=>'paid','description'=>'Transferencia bancaria confirmada via Khipu. ID:'.$khipuId]);
-        http_response_code(200);echo json_encode(['status'=>'ok']);exit;
+        $cfg = $this->cfg();
+        $pay = $db->fetch("SELECT * FROM payments WHERE khipu_payment_id = ?", [$khipuId]);
+        if (!$pay) { http_response_code(200); exit; }
+
+        // Idempotency
+        if ($pay['status'] === 'approved') {
+            http_response_code(200); echo json_encode(['status' => 'already_processed']); exit;
+        }
+
+        // Verify with Khipu API when credentials are configured
+        if ($cfg['receiver_id'] && $cfg['secret']) {
+            $verify = $this->khipuRequest('GET', '/payments/' . $khipuId);
+            if ($verify['status'] !== 200) { http_response_code(200); exit; }
+            $kp = $verify['body'];
+            if (($kp['status'] ?? '') !== 'done') { http_response_code(200); exit; }
+            if (abs((float)($kp['amount'] ?? 0) - (float)$pay['amount']) > 1) { http_response_code(200); exit; }
+        }
+
+        $immutable = ['paid', 'processing', 'dispatched', 'completed', 'cancelled', 'refunded', 'dispute'];
+        $order = $db->fetch("SELECT status FROM orders WHERE id = ?", [$pay['order_id']]);
+        $db->update('payments', ['status' => 'approved', 'raw_response' => json_encode($data)], 'id = ?', [$pay['id']]);
+        if ($order && !in_array($order['status'], $immutable, true)) {
+            $db->update('orders', ['status' => 'paid', 'payment_id' => $khipuId], 'id = ?', [$pay['order_id']]);
+            $db->insert('order_tracking', ['order_id' => $pay['order_id'], 'status' => 'paid', 'description' => 'Transferencia bancaria confirmada via Khipu. ID:' . $khipuId]);
+        }
+        http_response_code(200);
+        echo json_encode(['status' => 'ok']);
+        exit;
     }
 }
 
@@ -1833,7 +1963,7 @@ class OrderManagementController
         $db = DB::getInstance();
         $order = $db->fetch("SELECT * FROM orders WHERE id=? AND (seller_id=? OR EXISTS(SELECT 1 FROM order_items oi WHERE oi.order_id=orders.id AND oi.seller_id=?))", [$id, Auth::id(), Auth::id()]);
         if (!$order) Response::json(['error' => 'Orden no encontrada.'], 404);
-        if (!in_array($order['status'], ['paid','pending'])) Response::json(['error' => 'Solo puedes aceptar órdenes en estado pagado o pendiente.'], 400);
+        if ($order['status'] !== 'paid') Response::json(['error' => 'Solo puedes aceptar órdenes en estado pagado.'], 400);
         $db->beginTransaction();
         try {
             $db->update('orders', ['status' => 'processing', 'vendor_accepted_at' => date('Y-m-d H:i:s')], 'id=?', [$id]);

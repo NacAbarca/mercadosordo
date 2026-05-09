@@ -231,8 +231,8 @@ class Request
                  ?? '';
         }
 
-        // Fallback: query string ?_token=xxx
-        if (empty($auth) && !empty($_GET['_token'])) {
+        // Fallback: query string ?_token=xxx (only when explicitly enabled via env)
+        if (empty($auth) && !empty($_GET['_token']) && filter_var(env('ALLOW_TOKEN_QUERY_STRING', 'false'), FILTER_VALIDATE_BOOLEAN)) {
             return trim($_GET['_token']);
         }
 
