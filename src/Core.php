@@ -145,7 +145,7 @@ class Router
             $handler = fn() => $this->callHandler($route['handler'], $request);
             $pipeline = array_reduce(
                 array_reverse($route['middlewares']),
-                fn($next, $mw) => fn() => (new $mw)->handle($request, $next),
+                fn($next, $mw) => fn() => (is_object($mw) ? $mw : new $mw)->handle($request, $next),
                 $handler
             );
             $pipeline();
@@ -376,15 +376,43 @@ class AdminMiddleware implements MiddlewareInterface
 
 class RateLimitMiddleware implements MiddlewareInterface
 {
+    public function __construct(
+        private int $maxHits = 60,
+        private int $windowSeconds = 60
+    ) {}
+
     public function handle(Request $request, callable $next): void
     {
-        $key  = 'rl_' . md5($request->ip() . $request->uri());
-        $file = sys_get_temp_dir() . "/{$key}";
-        $data = file_exists($file) ? json_decode(file_get_contents($file), true) : ['count' => 0, 'reset' => time() + 60];
-        if (time() > $data['reset']) $data = ['count' => 0, 'reset' => time() + 60];
-        $data['count']++;
-        file_put_contents($file, json_encode($data));
-        if ($data['count'] > 60) Response::json(['error' => 'Too Many Requests'], 429);
+        $basePath = strtok($request->uri(), '?');
+        $keyHash  = hash('sha256', $request->ip() . $basePath);
+        $db       = DB::getInstance();
+
+        // Purge expired windows
+        $db->query(
+            'DELETE FROM rate_limits WHERE window_start < DATE_SUB(NOW(), INTERVAL ? SECOND)',
+            [$this->windowSeconds]
+        );
+
+        // Atomic upsert — UNIQUE on key_hash ensures ON DUPLICATE KEY fires correctly
+        $db->query(
+            'INSERT INTO rate_limits (key_hash, hits, window_start)
+             VALUES (?, 1, NOW())
+             ON DUPLICATE KEY UPDATE hits = hits + 1',
+            [$keyHash]
+        );
+
+        $row     = $db->fetch('SELECT hits, window_start FROM rate_limits WHERE key_hash = ?', [$keyHash]);
+        $hits    = (int) ($row['hits'] ?? 1);
+        $resetAt = $row ? (strtotime($row['window_start']) + $this->windowSeconds) : (time() + $this->windowSeconds);
+
+        header('X-RateLimit-Limit: ' . $this->maxHits);
+        header('X-RateLimit-Remaining: ' . max(0, $this->maxHits - $hits));
+        header('X-RateLimit-Reset: ' . $resetAt);
+
+        if ($hits > $this->maxHits) {
+            Response::json(['error' => 'Too Many Requests'], 429);
+        }
+
         $next();
     }
 }

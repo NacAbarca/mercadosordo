@@ -11,8 +11,8 @@ $router = new Router();
 
 $router->group(['prefix' => '/api'], function (Router $r) {
 
-    // ── Auth ─────────────────────────────────────────────────────────────
-    $r->group(['prefix' => '/auth', 'middleware' => [RateLimitMiddleware::class]], function (Router $r) {
+    // ── Auth — 20 req/15 min ─────────────────────────────────────────────
+    $r->group(['prefix' => '/auth', 'middleware' => [new RateLimitMiddleware(20, 900)]], function (Router $r) {
         $r->post('/register',        'MercadoSordo\Controllers\AuthController@register');
         $r->post('/login',           'MercadoSordo\Controllers\AuthController@login');
         $r->post('/forgot-password', 'MercadoSordo\Controllers\AuthController@forgotPassword');
@@ -42,8 +42,8 @@ $router->group(['prefix' => '/api'], function (Router $r) {
     // MP redirige aquí sin cabeceras de auth — fuera del grupo AuthMiddleware
     $r->get('/vendor/mp/callback',             'MercadoSordo\Controllers\MercadoPagoController@oauthCallback');
 
-    // ── Rutas autenticadas ────────────────────────────────────────────────
-    $r->group(['middleware' => [AuthMiddleware::class]], function (Router $r) {
+    // ── Rutas autenticadas — 200 req/15 min ──────────────────────────────
+    $r->group(['middleware' => [AuthMiddleware::class, new RateLimitMiddleware(200, 900)]], function (Router $r) {
 
         // Productos (vendedor)
         $r->get('/my/products',              'MercadoSordo\Controllers\ProductController@myProducts');
@@ -59,7 +59,8 @@ $router->group(['prefix' => '/api'], function (Router $r) {
         // Órdenes
         $r->get('/orders',                   'MercadoSordo\Controllers\OrderController@index');
         $r->get('/orders/{id}',              'MercadoSordo\Controllers\OrderController@show');
-        $r->post('/orders/checkout',         'MercadoSordo\Controllers\OrderController@checkout');
+        // checkout — 10 req/5 min (más restrictivo que el grupo — corre DESPUÉS del group RateLimit)
+        $r->post('/orders/checkout',         'MercadoSordo\Controllers\OrderController@checkout', [new RateLimitMiddleware(10, 300)]);
 
         // Pagos — Mercado Pago
         $r->get('/vendor/mp/status',             'MercadoSordo\Controllers\MercadoPagoController@accountStatus');
